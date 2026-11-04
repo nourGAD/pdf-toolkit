@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "PDF Toolkit",
+    "slug": "pdf-toolkit",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nourgad.pdftoolkit",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Choose photos to convert into a PDF.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.nourgad.pdftoolkit",
+      "permissions": []
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose photos to convert into a PDF.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-dev-client"
+    ]
+  }
+}
