@@ -2,7 +2,7 @@
   "expo": {
     "name": "PDF Toolkit",
     "slug": "pdf-toolkit",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -44,7 +44,8 @@
         {
           "cameraPermission": "Use the camera to scan documents into PDF."
         }
-      ]
+      ],
+      "./plugins/withLargeHeap"
     ],
     "owner": "nourgad",
     "extra": {

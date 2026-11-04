@@ -16,10 +16,12 @@ import { WebView as RNWebView } from 'react-native-webview';
 import type { ComponentType, Ref } from 'react';
 import * as Speech from 'expo-speech';
 import { File } from 'expo-file-system';
+import { Buffer } from 'buffer';
 import { READER_HTML } from '../reader/readerHtml';
 import { Bookmark, LibraryDoc, addBookmark, removeBookmark, updateDoc } from '../lib/library';
 
 const RATES = [0.8, 1, 1.25, 1.5] as const;
+const CHUNK = 512 * 1024; // bytes sent to the viewer per message
 
 // react-native-webview's prop types currently collapse to `never` with RN 0.88 types; use a narrow typed wrapper.
 type WebViewHandle = { injectJavaScript: (code: string) => void };
@@ -52,6 +54,34 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
   const rateRef = useRef(rate);
   const textWaiters = useRef(new Map<string, (t: string) => void>());
 
+  // Byte-range reader: pdf.js asks for pieces of the file, we read just those from disk.
+  // (Reading the whole file at once crashed on big PDFs — OutOfMemoryError.)
+  const handle = useRef<ReturnType<File['open']> | null>(null);
+  const rangeQueue = useRef<{ begin: number; end: number }[]>([]);
+  const pumping = useRef(false);
+
+  async function pumpRanges() {
+    if (pumping.current) return;
+    pumping.current = true;
+    try {
+      while (rangeQueue.current.length) {
+        const { begin, end } = rangeQueue.current.shift()!;
+        if (!handle.current) handle.current = new File(doc.uri).open();
+        for (let pos = begin; pos < end; pos += CHUNK) {
+          const len = Math.min(CHUNK, end - pos);
+          handle.current.offset = pos;
+          const bytes = await handle.current.readBytes(len);
+          js(`window.__chunk(${pos}, "${Buffer.from(bytes).toString('base64')}")`);
+          await new Promise((r) => setTimeout(r, 0)); // keep the UI responsive
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Could not read file', err?.message ?? String(err));
+    } finally {
+      pumping.current = false;
+    }
+  }
+
   pageRef.current = page;
   pagesRef.current = pages;
   rateRef.current = rate;
@@ -66,13 +96,18 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
       switch (m.type) {
         case 'ready': {
           try {
-            const b64 = await new File(doc.uri).base64();
-            js(`window.__load(${JSON.stringify(b64)}, ${doc.lastPage})`);
+            const size = new File(doc.uri).size ?? 0;
+            if (!size) throw new Error('The file is empty or missing');
+            js(`window.__open(${size}, ${doc.lastPage}, ${CHUNK})`);
           } catch (err: any) {
             Alert.alert('Could not open file', err?.message ?? String(err));
           }
           break;
         }
+        case 'range':
+          rangeQueue.current.push({ begin: m.begin, end: m.end });
+          pumpRanges();
+          break;
         case 'loaded':
           setLoading(false);
           setPages(m.pages);
@@ -155,6 +190,9 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
   useEffect(() => () => {
     ttsOn.current = false;
     Speech.stop();
+    try {
+      handle.current?.close();
+    } catch {}
   }, []);
 
   // ---- bookmarks ----

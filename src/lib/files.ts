@@ -31,8 +31,26 @@ export async function pickImages(): Promise<PickedFile[]> {
   }));
 }
 
+/** Tools load the whole file into memory, so keep a safe ceiling. The Reader has no limit. */
+export const TOOL_MAX_MB = 120;
+
 export async function readBytes(uri: string): Promise<Uint8Array> {
-  return new File(uri).bytes();
+  const f = new File(uri);
+  const mb = (f.size ?? 0) / 1024 / 1024;
+  if (mb > TOOL_MAX_MB) {
+    throw new Error(
+      `This file is ${Math.round(mb)} MB. Tools can process files up to ${TOOL_MAX_MB} MB on the phone.\n` +
+        `الملف كبير (${Math.round(mb)} MB). الأدوات بتشتغل لحد ${TOOL_MAX_MB} MB — لكن تقدر تفتحه في القارئ عادي.`,
+    );
+  }
+  try {
+    return await f.bytes();
+  } catch (e: any) {
+    if (/OutOfMemory/i.test(String(e?.message))) {
+      throw new Error('Not enough memory on this phone for this file. Try a smaller file or close other apps.');
+    }
+    throw e;
+  }
 }
 
 /** Output folder inside the app's documents directory. */

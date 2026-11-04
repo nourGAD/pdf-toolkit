@@ -4,13 +4,14 @@ import { PDFJS_LIB, PDFJS_WORKER } from './pdfjsBundle';
  * Offline PDF viewer that runs inside a WebView using pdf.js (main-thread "fake worker").
  *
  * RN → Web (via injectJavaScript):
- *   window.__load(base64, startPage)   open a document and jump to a page
+ *   window.__open(size, startPage, chunk) open a document; pages are read on demand via 'range' requests
+ *   window.__chunk(begin, base64)      deliver a requested byte range
  *   window.__goto(page)                scroll to a page (1-based)
  *   window.__getText(page, reqId)      extract plain text of a page
  *   window.__highlight(on)             tint the page being read aloud
  *
  * Web → RN (postMessage JSON):
- *   {type:'loaded', pages} | {type:'page', page} | {type:'text', page, text, reqId} | {type:'error', message}
+ *   {type:'range', begin, end} | {type:'loaded', pages} | {type:'page', page} | {type:'text', page, text, reqId} | {type:'error', message}
  */
 const script = String.raw`
 (function () {
@@ -71,26 +72,44 @@ const script = String.raw`
     if (reading) { var el = document.getElementById('p' + current); if (el) el.classList.add('reading'); }
   }
 
-  window.__load = function (b64, startPage) {
-    lib.getDocument({ data: b64ToBytes(b64), isEvalSupported: false, useSystemFonts: true }).promise.then(function (d) {
-      doc = d;
-      return d.getPage(1).then(function (p1) {
-        var vp = p1.getViewport({ scale: 1 }), ratio = vp.height / vp.width;
-        var w = pagesEl.clientWidth;
-        for (var i = 1; i <= d.numPages; i++) {
-          var div = document.createElement('div');
-          div.className = 'page'; div.id = 'p' + i; div.dataset.page = i;
-          div.style.height = (w * ratio) + 'px';
-          div.innerHTML = '<span>' + i + '</span>';
-          pagesEl.appendChild(div); io.observe(div);
-        }
-        post({ type: 'loaded', pages: d.numPages });
-        var s = Math.max(1, Math.min(startPage || 1, d.numPages));
-        if (s > 1) setTimeout(function () { window.__goto(s); }, 50);
-      });
-    }).catch(function (e) {
-      post({ type: 'error', message: e && e.name === 'PasswordException' ? 'This PDF is password-protected' : String(e && e.message || e) });
+  function onOpened(d, startPage) {
+    doc = d;
+    return d.getPage(1).then(function (p1) {
+      var vp = p1.getViewport({ scale: 1 }), ratio = vp.height / vp.width;
+      var w = pagesEl.clientWidth;
+      for (var i = 1; i <= d.numPages; i++) {
+        var div = document.createElement('div');
+        div.className = 'page'; div.id = 'p' + i; div.dataset.page = i;
+        div.style.height = (w * ratio) + 'px';
+        div.innerHTML = '<span>' + i + '</span>';
+        pagesEl.appendChild(div); io.observe(div);
+      }
+      post({ type: 'loaded', pages: d.numPages });
+      var s = Math.max(1, Math.min(startPage || 1, d.numPages));
+      if (s > 1) setTimeout(function () { window.__goto(s); }, 50);
     });
+  }
+  function onFail(e) {
+    post({ type: 'error', message: e && e.name === 'PasswordException' ? 'This PDF is password-protected' : String(e && e.message || e) });
+  }
+
+  // Large-file mode: pdf.js asks for byte ranges, the app reads only those pieces from disk.
+  // Memory stays small even for 500 MB files.
+  var transport = null;
+  window.__open = function (length, startPage, chunkSize) {
+    transport = new lib.PDFDataRangeTransport(length, null);
+    transport.requestDataRange = function (begin, end) { post({ type: 'range', begin: begin, end: end }); };
+    lib.getDocument({
+      range: transport, length: length, rangeChunkSize: chunkSize,
+      disableAutoFetch: true, disableStream: true, isEvalSupported: false, useSystemFonts: true
+    }).promise.then(function (d) { return onOpened(d, startPage); }).catch(onFail);
+  };
+  window.__chunk = function (begin, b64) { transport && transport.onDataRange(begin, b64ToBytes(b64)); };
+
+  // Small-file mode (kept for tests / tiny docs)
+  window.__load = function (b64, startPage) {
+    lib.getDocument({ data: b64ToBytes(b64), isEvalSupported: false, useSystemFonts: true })
+      .promise.then(function (d) { return onOpened(d, startPage); }).catch(onFail);
   };
 
   window.__goto = function (n) {
