@@ -29,7 +29,11 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<ToolResult | null>(null);
-  const [cropIndex, setCropIndex] = useState<number | null>(null);
+  // indexes waiting to be cropped (gallery photos open the crop editor one after another)
+  const [cropQueue, setCropQueue] = useState<number[]>([]);
+  const [cropTotal, setCropTotal] = useState(0);
+  const cropIndex = cropQueue.length ? cropQueue[0] : null;
+  const nextCrop = () => setCropQueue((q) => q.slice(1));
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   const isImages = tool.input === 'images';
@@ -46,7 +50,13 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
       if (!picked.length) return;
       setResult(null);
       setSelected(new Set());
+      const startAt = multi ? files.length : 0;
       setFiles((prev) => (multi ? [...prev, ...picked] : picked));
+      if (source === 'gallery') {
+        const q = picked.map((_, k) => startAt + k);
+        setCropQueue(q);
+        setCropTotal(q.length);
+      }
     } catch (e: any) {
       Alert.alert(source === 'scan' ? 'Scanner not available' : 'Could not open file', e?.message ?? String(e));
     }
@@ -134,8 +144,8 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
             <Step n={1} label={isImages ? 'Add pages' : multi ? 'Choose files' : 'Choose a PDF'} />
             {isImages ? (
               <View style={styles.row}>
-                <BigBtn icon="📷" label="Scan with camera" sub="Auto crop" color={tool.color} onPress={() => add('scan')} />
-                <BigBtn icon="🖼️" label="From gallery" sub="Crop after" color={tool.color} onPress={() => add('gallery')} />
+                <BigBtn icon="📷" label="Scan with camera" sub="Auto-detects edges" color={tool.color} onPress={() => add('scan')} />
+                <BigBtn icon="🖼️" label="From gallery" sub="Pick + crop corners" color={tool.color} onPress={() => add('gallery')} />
               </View>
             ) : (
               <Pressable style={[styles.pick, { borderColor: tool.color }]} onPress={() => add('pdf')}>
@@ -152,7 +162,7 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
                     <Image source={{ uri: f.uri }} style={styles.img} resizeMode="cover" />
                     <Text style={styles.imgNo}>{i + 1}</Text>
                     <View style={styles.imgActions}>
-                      <Icon label="✂️" onPress={() => setCropIndex(i)} />
+                      <Icon label="✂️" onPress={() => (setCropTotal(1), setCropQueue([i]))} />
                       <Icon label="⟳" onPress={async () => replace(i, await rotateImage(f, 90))} />
                       <Icon label="◀" onPress={() => move(i, -1)} />
                       <Icon label="▶" onPress={() => move(i, 1)} />
@@ -257,11 +267,13 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
         onCancel={() => setConfirming(false)}
       />
       <CropModal
-        image={cropIndex != null ? files[cropIndex] : null}
-        onCancel={() => setCropIndex(null)}
+        image={cropIndex != null ? (files[cropIndex] ?? null) : null}
+        index={cropTotal - cropQueue.length}
+        total={cropTotal}
+        onCancel={nextCrop}
         onDone={(img) => {
           if (cropIndex != null) replace(cropIndex, img);
-          setCropIndex(null);
+          nextCrop();
         }}
       />
     </KeyboardAvoidingView>

@@ -19,6 +19,10 @@ All libraries are MIT or Apache-2.0, so they're free for commercial use.
 
 `src/reader/pdfjsBundle.ts` is generated from `pdfjs-dist` by `npm install` (postinstall).
 
+## v1.2
+- Android scanner = own ML Kit module (`modules/doc-scanner`) — fixes NullPointerException in the third-party plugin (still used on iOS)
+- 4-corner crop with perspective correction + magnifier (`src/crop/cropHtml.ts`); gallery photos open it automatically
+
 ## v1.1
 - Visual page picker (thumbnails, All / None / Odd / Even) instead of typing ranges
 - Camera document scanner (ML Kit / VisionKit): auto edge detection + crop, like CamScanner

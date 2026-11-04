@@ -1,126 +1,90 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  LayoutChangeEvent,
-  Modal,
-  PanResponder,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ComponentType, Ref } from 'react';
+import { WebView as RNWebView } from 'react-native-webview';
+import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
+import { File, Paths } from 'expo-file-system';
 import { PickedFile } from '../lib/files';
-import { cropImage, imageSize, rotateImage } from '../lib/images';
+import { imageSize } from '../lib/images';
+import { CROP_HTML } from '../crop/cropHtml';
 
-type Rect = { x: number; y: number; w: number; h: number };
-type Corner = 'tl' | 'tr' | 'bl' | 'br' | 'move';
-const MIN = 40;
-const HANDLE = 28;
+type WebViewHandle = { injectJavaScript: (code: string) => void };
+const WebView = RNWebView as unknown as ComponentType<{
+  ref?: Ref<WebViewHandle>;
+  source: { html: string };
+  originWhitelist: string[];
+  onMessage: (e: { nativeEvent: { data: string } }) => void;
+  scrollEnabled?: boolean;
+  style?: object;
+}>;
 
-/** Simple crop + rotate editor: drag the corners, or drag inside the box to move it. */
+const WORK_MAX = 2400; // downscale before editing — fast and memory-safe
+const OUT_MAX = 2480; // ≈ A4 @ 300 dpi
+
+/**
+ * CamScanner-style crop: drag the 4 corners onto the document's corners,
+ * the page is straightened (perspective correction) when you tap Done.
+ */
 export default function CropModal({
   image,
+  index,
+  total,
   onDone,
   onCancel,
 }: {
   image: PickedFile | null;
+  index?: number;
+  total?: number;
   onDone: (img: PickedFile) => void;
   onCancel: () => void;
 }) {
-  const [img, setImg] = useState<PickedFile | null>(image);
-  const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
-  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
-  const [rect, setRect] = useState<Rect | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => setImg(image), [image]);
-  useEffect(() => {
-    setNatural(null);
-    setRect(null);
-    if (img) imageSize(img.uri).then(setNatural).catch(() => setNatural(null));
-  }, [img]);
-
-  // where the image is drawn inside the container (contain)
-  const frame = useMemo(() => {
-    if (!natural || !box) return null;
-    const s = Math.min(box.w / natural.width, box.h / natural.height);
-    const w = natural.width * s;
-    const h = natural.height * s;
-    return { x: (box.w - w) / 2, y: (box.h - h) / 2, w, h, scale: s };
-  }, [natural, box]);
+  const web = useRef<WebViewHandle>(null);
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(true);
+  const js = (c: string) => web.current?.injectJavaScript(`${c};true;`);
 
   useEffect(() => {
-    if (frame) setRect({ x: frame.x + frame.w * 0.06, y: frame.y + frame.h * 0.06, w: frame.w * 0.88, h: frame.h * 0.88 });
-  }, [frame]);
-
-  const rectRef = useRef(rect);
-  rectRef.current = rect;
-  const frameRef = useRef(frame);
-  frameRef.current = frame;
-
-  const responder = (corner: Corner) => {
-    let start: Rect;
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        start = rectRef.current!;
-      },
-      onPanResponderMove: (_, g) => {
-        const f = frameRef.current!;
-        let { x, y, w, h } = start;
-        if (corner === 'move') {
-          x = clamp(start.x + g.dx, f.x, f.x + f.w - w);
-          y = clamp(start.y + g.dy, f.y, f.y + f.h - h);
-        } else {
-          const right = start.x + start.w;
-          const bottom = start.y + start.h;
-          if (corner === 'tl' || corner === 'bl') {
-            x = clamp(start.x + g.dx, f.x, right - MIN);
-            w = right - x;
-          } else w = clamp(start.w + g.dx, MIN, f.x + f.w - start.x);
-          if (corner === 'tl' || corner === 'tr') {
-            y = clamp(start.y + g.dy, f.y, bottom - MIN);
-            h = bottom - y;
-          } else h = clamp(start.h + g.dy, MIN, f.y + f.h - start.y);
-        }
-        setRect({ x, y, w, h });
-      },
-    });
-  };
-  const handles = useMemo(
-    () => ({
-      tl: responder('tl'),
-      tr: responder('tr'),
-      bl: responder('bl'),
-      br: responder('br'),
-      move: responder('move'),
-    }),
-    [],
-  );
-
-  async function rotate() {
-    if (!img) return;
+    setReady(false);
     setBusy(true);
+  }, [image?.uri]);
+
+  async function sendImage() {
+    if (!image) return;
     try {
-      setImg(await rotateImage(img, 90));
-    } finally {
-      setBusy(false);
+      const { width, height } = await imageSize(image.uri);
+      const k = Math.min(1, WORK_MAX / Math.max(width, height));
+      const r = await manipulateAsync(
+        image.uri,
+        k < 1 ? [{ resize: { width: Math.round(width * k), height: Math.round(height * k) } }] : [],
+        { compress: 0.9, format: SaveFormat.JPEG, base64: true },
+      );
+      js(`window.__setImage(${JSON.stringify('data:image/jpeg;base64,' + r.base64)})`);
+    } catch (e: any) {
+      Alert.alert('Could not open image', e?.message ?? String(e));
+      onCancel();
     }
   }
 
-  async function apply() {
-    if (!img || !rect || !frame || !natural) return;
-    setBusy(true);
-    try {
-      const s = 1 / frame.scale;
-      const originX = Math.max(0, Math.round((rect.x - frame.x) * s));
-      const originY = Math.max(0, Math.round((rect.y - frame.y) * s));
-      const width = Math.min(natural.width - originX, Math.round(rect.w * s));
-      const height = Math.min(natural.height - originY, Math.round(rect.h * s));
-      onDone(await cropImage(img, { originX, originY, width, height }));
-    } finally {
+  function onMessage(e: { nativeEvent: { data: string } }) {
+    const m = JSON.parse(e.nativeEvent.data);
+    if (m.type === 'ready') sendImage();
+    else if (m.type === 'loaded') {
+      setReady(true);
       setBusy(false);
+    } else if (m.type === 'result') {
+      try {
+        const out = new File(Paths.cache, `crop_${Date.now()}.jpg`);
+        out.create({ overwrite: true });
+        out.write(m.data, { encoding: 'base64' });
+        onDone({ uri: out.uri, name: (image?.name ?? 'page').replace(/\.\w+$/, '') + '.jpg', mimeType: 'image/jpeg' });
+      } catch (err: any) {
+        Alert.alert('Could not save crop', err?.message ?? String(err));
+      } finally {
+        setBusy(false);
+      }
+    } else if (m.type === 'error') {
+      setBusy(false);
+      Alert.alert('Crop error', m.message);
     }
   }
 
@@ -129,48 +93,34 @@ export default function CropModal({
       <View style={styles.root}>
         <View style={styles.top}>
           <Pressable onPress={onCancel} hitSlop={10}>
-            <Text style={styles.topBtn}>Cancel</Text>
+            <Text style={styles.topBtn}>Keep original</Text>
           </Pressable>
-          <Text style={styles.title}>Crop</Text>
-          <Pressable onPress={apply} hitSlop={10} disabled={busy}>
-            <Text style={[styles.topBtn, { fontWeight: '800' }]}>Done</Text>
+          <Text style={styles.title}>{total && total > 1 ? `Crop ${(index ?? 0) + 1}/${total}` : 'Crop'}</Text>
+          <Pressable
+            onPress={() => {
+              setBusy(true);
+              setTimeout(() => js(`window.__apply(${OUT_MAX})`), 30);
+            }}
+            hitSlop={10}
+            disabled={!ready || busy}
+          >
+            <Text style={[styles.topBtn, styles.done, (!ready || busy) && { opacity: 0.4 }]}>Done ✓</Text>
           </Pressable>
         </View>
 
-        <View style={styles.stage} onLayout={(e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-          {img && frame && (
-            <Image source={{ uri: img.uri }} style={{ position: 'absolute', left: frame.x, top: frame.y, width: frame.w, height: frame.h }} />
+        <View style={{ flex: 1 }}>
+          {image && (
+            <WebView
+              key={image.uri}
+              ref={web}
+              source={{ html: CROP_HTML }}
+              originWhitelist={['*']}
+              onMessage={onMessage}
+              scrollEnabled={false}
+              style={{ flex: 1, backgroundColor: '#111' }}
+            />
           )}
-          {rect && frame && (
-            <>
-              {/* dim outside the crop box */}
-              <View style={[styles.dim, { left: 0, right: 0, top: 0, height: rect.y }]} />
-              <View style={[styles.dim, { left: 0, right: 0, top: rect.y + rect.h, bottom: 0 }]} />
-              <View style={[styles.dim, { left: 0, width: rect.x, top: rect.y, height: rect.h }]} />
-              <View style={[styles.dim, { left: rect.x + rect.w, right: 0, top: rect.y, height: rect.h }]} />
-              <View {...handles.move.panHandlers} style={[styles.box, { left: rect.x, top: rect.y, width: rect.w, height: rect.h }]}>
-                <View style={[styles.grid, { left: '33.3%' }]} />
-                <View style={[styles.grid, { left: '66.6%' }]} />
-                <View style={[styles.gridH, { top: '33.3%' }]} />
-                <View style={[styles.gridH, { top: '66.6%' }]} />
-              </View>
-              {(['tl', 'tr', 'bl', 'br'] as const).map((c) => (
-                <View
-                  key={c}
-                  {...handles[c].panHandlers}
-                  hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-                  style={[
-                    styles.handle,
-                    {
-                      left: (c[1] === 'l' ? rect.x : rect.x + rect.w) - HANDLE / 2,
-                      top: (c[0] === 't' ? rect.y : rect.y + rect.h) - HANDLE / 2,
-                    },
-                  ]}
-                />
-              ))}
-            </>
-          )}
-          {(busy || !frame) && (
+          {busy && (
             <View style={styles.busy}>
               <ActivityIndicator color="#fff" size="large" />
             </View>
@@ -178,40 +128,31 @@ export default function CropModal({
         </View>
 
         <View style={styles.bottom}>
-          <Text style={styles.hint}>Drag the corners to fit the document · اسحب الأركان</Text>
-          <Pressable onPress={rotate} style={styles.rotate} disabled={busy}>
-            <Text style={styles.rotateText}>⟳ Rotate</Text>
-          </Pressable>
+          <Text style={styles.hint}>اسحب الـ 4 أركان على أطراف الورقة · Drag the 4 corners onto the document</Text>
+          <View style={styles.row}>
+            <Pressable style={styles.tool} onPress={() => js('window.__rotate()')} disabled={!ready}>
+              <Text style={styles.toolText}>⟳ Rotate</Text>
+            </Pressable>
+            <Pressable style={styles.tool} onPress={() => js('window.__reset()')} disabled={!ready}>
+              <Text style={styles.toolText}>⛶ Full image</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>
   );
 }
 
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#111' },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingTop: 48 },
-  topBtn: { color: '#5AB4FF', fontSize: 17 },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingTop: 44 },
+  topBtn: { color: '#AAB0BC', fontSize: 16 },
+  done: { color: '#3DDC6A', fontWeight: '800', fontSize: 17 },
   title: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  stage: { flex: 1, margin: 16 },
-  dim: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.55)' },
-  box: { position: 'absolute', borderWidth: 2, borderColor: '#fff' },
-  grid: { position: 'absolute', top: 0, bottom: 0, width: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.5)' },
-  gridH: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.5)' },
-  handle: {
-    position: 'absolute',
-    width: HANDLE,
-    height: HANDLE,
-    borderRadius: HANDLE / 2,
-    backgroundColor: '#1F8FE5',
-    borderWidth: 3,
-    borderColor: '#fff',
-  },
-  busy: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  bottom: { padding: 16, paddingBottom: 36, alignItems: 'center', gap: 12 },
-  hint: { color: '#AAB0BC', fontSize: 13 },
-  rotate: { borderWidth: 1, borderColor: '#555', borderRadius: 999, paddingHorizontal: 22, paddingVertical: 10 },
-  rotateText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  busy: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
+  bottom: { padding: 16, paddingBottom: 34, gap: 12 },
+  hint: { color: '#AAB0BC', fontSize: 13, textAlign: 'center' },
+  row: { flexDirection: 'row', gap: 10 },
+  tool: { flex: 1, borderWidth: 1, borderColor: '#444', borderRadius: 999, paddingVertical: 12, alignItems: 'center' },
+  toolText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });

@@ -1,7 +1,8 @@
-import { Image } from 'react-native';
+import { Image, Platform } from 'react-native';
 import DocumentScanner, { ResponseType, ScanDocumentResponseStatus } from 'react-native-document-scanner-plugin';
 import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import { PickedFile } from './files';
+import { DocScanner } from '../../modules/doc-scanner';
 
 /**
  * CamScanner-style capture: auto edge detection, crop, perspective fix and filters.
@@ -9,13 +10,21 @@ import { PickedFile } from './files';
  * iOS: Apple VisionKit. Both run on-device and are free.
  */
 export async function scanDocuments(): Promise<PickedFile[]> {
-  const res = await DocumentScanner.scanDocument({
-    croppedImageQuality: 92,
-    responseType: ResponseType.ImageFilePath,
-  });
-  if (res.status === ScanDocumentResponseStatus.Cancel || !res.scannedImages?.length) return [];
+  let paths: string[];
+  if (Platform.OS === 'android') {
+    // our own ML Kit module (the third-party plugin crashed with NullPointerException on RN 0.88)
+    if (!DocScanner) throw new Error('Scanner module missing from this build');
+    paths = await DocScanner.scan(0, true); // 0 = no page limit, true = allow import from gallery
+  } else {
+    const res = await DocumentScanner.scanDocument({
+      croppedImageQuality: 92,
+      responseType: ResponseType.ImageFilePath,
+    });
+    paths = res.status === ScanDocumentResponseStatus.Cancel ? [] : (res.scannedImages ?? []);
+  }
+  if (!paths.length) return [];
   const stamp = Date.now();
-  return res.scannedImages.map((p, i) => ({
+  return paths.map((p, i) => ({
     uri: p.startsWith('file://') || p.startsWith('content://') ? p : `file://${p}`,
     name: `scan_${stamp}_${i + 1}.jpg`,
     mimeType: 'image/jpeg',
