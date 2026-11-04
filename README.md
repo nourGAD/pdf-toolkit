@@ -19,6 +19,14 @@ All libraries are MIT or Apache-2.0, so they're free for commercial use.
 
 `src/reader/pdfjsBundle.ts` is generated from `pdfjs-dist` by `npm install` (postinstall).
 
+## v1.1
+- Visual page picker (thumbnails, All / None / Odd / Even) instead of typing ranges
+- Camera document scanner (ML Kit / VisionKit): auto edge detection + crop, like CamScanner
+- Crop / rotate / reorder gallery photos before making the PDF
+- Confirm step before processing
+- Result preview (page thumbnails) before Save / Share, plus "Open in reader"
+- Sticky action button (always visible)
+
 ## Structure
 ```
 App.tsx                  navigation (Home ↔ Tool)

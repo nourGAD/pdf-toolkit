@@ -7,7 +7,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import ToolScreen from './src/screens/ToolScreen';
 import ReaderScreen from './src/screens/ReaderScreen';
 import { Tool } from './src/tools';
-import { LibraryDoc } from './src/lib/library';
+import { LibraryDoc, openInLibrary } from './src/lib/library';
 
 // pdf-lib / jszip expect Buffer in some code paths
 (globalThis as any).Buffer ??= Buffer;
@@ -35,7 +35,13 @@ export default function App() {
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         <View style={styles.root}>
-          {route.name === 'tool' && <ToolScreen tool={route.tool} onBack={home} />}
+          {route.name === 'tool' && (
+            <ToolScreen
+              tool={route.tool}
+              onBack={home}
+              onRead={async (f) => setRoute({ name: 'reader', doc: await openInLibrary(f) })}
+            />
+          )}
           {route.name === 'reader' && <ReaderScreen key={route.doc.id} doc={route.doc} onBack={home} />}
           {route.name === 'home' && (
             <HomeScreen

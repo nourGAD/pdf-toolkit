@@ -2,7 +2,7 @@
   "expo": {
     "name": "PDF Toolkit",
     "slug": "pdf-toolkit",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,8 @@
       "bundleIdentifier": "com.nourgad.pdftoolkit",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Choose photos to convert into a PDF.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Use the camera to scan documents into PDF."
       }
     },
     "android": {
@@ -37,7 +38,19 @@
           "microphonePermission": false
         }
       ],
-      "expo-dev-client"
-    ]
+      "expo-dev-client",
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "Use the camera to scan documents into PDF."
+        }
+      ]
+    ],
+    "owner": "nourgad",
+    "extra": {
+      "eas": {
+        "projectId": "c9d215ee-efb0-4fee-806c-b68eea182b58"
+      }
+    }
   }
 }
