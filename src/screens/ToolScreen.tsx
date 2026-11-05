@@ -9,7 +9,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { PickedFile, pickImages, pickPdfs, shareFile } from '../lib/files';
@@ -19,12 +18,13 @@ import PagePicker, { toRange } from '../components/PagePicker';
 import CropModal from '../components/CropModal';
 import ConfirmSheet from '../components/ConfirmSheet';
 import ResultPreview from '../components/ResultPreview';
+import WatermarkOptions, { DEFAULT_WATERMARK } from '../components/WatermarkOptions';
 
 type Props = { tool: Tool; onBack: () => void; onRead: (f: PickedFile) => void };
 
 export default function ToolScreen({ tool, onBack, onRead }: Props) {
   const [files, setFiles] = useState<PickedFile[]>([]);
-  const [opts, setOpts] = useState<ToolOptions>({ range: '', angle: 90, text: 'CONFIDENTIAL' });
+  const [opts, setOpts] = useState<ToolOptions>({ range: '', angle: 90, wm: DEFAULT_WATERMARK, wmImage: null });
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -40,7 +40,8 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
   const multi = tool.input !== 'pdf';
   const minFiles = tool.input === 'pdfs' ? 2 : 1;
   const needPages = tool.pages?.required && selected.size === 0;
-  const canRun = files.length >= minFiles && !needPages && !busy;
+  const needText = !!tool.fields?.includes('watermark') && (!opts.wm.text.trim() || !opts.wmImage);
+  const canRun = files.length >= minFiles && !needPages && !needText && !busy;
 
   // ---------- input ----------
   async function add(source: 'pdf' | 'gallery' | 'scan') {
@@ -115,6 +116,8 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
           : 'Select a PDF first'
       : needPages
         ? 'Tap the pages to delete'
+        : needText
+          ? 'Type the watermark text'
         : `Continue · ${tool.title}`;
 
   return (
@@ -199,7 +202,7 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
             {/* STEP 2 — options */}
             {files.length >= 1 && (tool.fields?.length || tool.pages) && (
               <>
-                <Step n={2} label={tool.pages ? 'Choose pages' : 'Options'} />
+                <Step n={2} label={tool.pages ? 'Choose pages' : tool.fields?.includes('watermark') ? 'Your watermark' : 'Options'} />
 
                 {tool.fields?.includes('angle') && (
                   <View style={[styles.row, { marginBottom: 12 }]}>
@@ -215,16 +218,14 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
                   </View>
                 )}
 
-                {tool.fields?.includes('text') && (
-                  <View style={{ marginBottom: 12 }}>
-                    <Text style={styles.label}>Watermark text (English)</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={opts.text}
-                      onChangeText={(text) => setOpts((o) => ({ ...o, text }))}
-                      autoCapitalize="characters"
-                    />
-                  </View>
+                {tool.fields?.includes('watermark') && files[0] && (
+                  <WatermarkOptions
+                    fileUri={files[0].uri}
+                    value={opts.wm}
+                    onChange={(wm) => setOpts((o) => ({ ...o, wm }))}
+                    onImage={(wmImage) => setOpts((o) => ({ ...o, wmImage }))}
+                    color={tool.color}
+                  />
                 )}
 
                 {tool.pages && files[0] && (

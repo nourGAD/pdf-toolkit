@@ -157,25 +157,71 @@ export async function addPageNumbers(file: PickedFile): Promise<Uint8Array> {
   return doc.save();
 }
 
-/** Diagonal text watermark. Standard PDF fonts support Latin text only. */
-export async function addWatermark(file: PickedFile, text: string): Promise<Uint8Array> {
-  if (!text.trim()) throw new Error('Enter the watermark text');
-  if (/[^\x20-\x7E]/.test(text)) throw new Error('Watermark supports English letters/numbers only for now');
+export type WatermarkStamp = {
+  /** transparent PNG of the text (rendered with the phone's fonts → any language, incl. Arabic) */
+  png: Uint8Array;
+  opacity: number; // 0..1
+  angle: number; // degrees, counter-clockwise (45 = diagonal ↗)
+  scale: number; // stamp width relative to page width (center layout)
+  layout: 'center' | 'tile';
+};
+
+/**
+ * Where each stamp goes on a page (PDF units, origin bottom-left, cx/cy = stamp center).
+ * Shared by the PDF writer and the on-screen preview so both look identical.
+ */
+export function watermarkLayout(
+  width: number,
+  height: number,
+  imgW: number,
+  imgH: number,
+  wm: Pick<WatermarkStamp, 'angle' | 'scale' | 'layout'>,
+): { cx: number; cy: number; w: number; h: number }[] {
+  const rad = (wm.angle * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  const ratio = imgH / imgW;
+  if (wm.layout === 'center') {
+    let w = width * wm.scale;
+    const h = w * ratio;
+    const fit = Math.min(1, (width * 0.95) / (w * cos + h * sin), (height * 0.95) / (w * sin + h * cos));
+    w *= fit;
+    return [{ cx: width / 2, cy: height / 2, w, h: w * ratio }];
+  }
+  const w = width * Math.max(0.18, wm.scale * 0.45);
+  const h = w * ratio;
+  const stepX = w * 1.35;
+  const stepY = Math.max(h * 3, w * 0.75);
+  const out: { cx: number; cy: number; w: number; h: number }[] = [];
+  let row = 0;
+  for (let y = stepY / 2; y < height + stepY; y += stepY, row++) {
+    const offset = row % 2 ? stepX / 2 : 0;
+    for (let x = offset; x < width + stepX; x += stepX) out.push({ cx: x, cy: y, w, h });
+  }
+  return out;
+}
+
+/** Stamp a watermark image on every page, centered or repeated across the page. */
+export async function addWatermark(file: PickedFile, wm: WatermarkStamp): Promise<Uint8Array> {
+  if (!wm.png?.length) throw new Error('Type the watermark text first');
   const doc = await load(file);
-  const font = await doc.embedFont(StandardFonts.HelveticaBold);
+  const img = await doc.embedPng(wm.png);
+  const rad = (wm.angle * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
   for (const page of doc.getPages()) {
     const { width, height } = page.getSize();
-    const size = Math.min(width, height) / 9;
-    const tw = font.widthOfTextAtSize(text, size);
-    page.drawText(text, {
-      x: width / 2 - (tw / 2) * Math.cos(Math.PI / 4),
-      y: height / 2 - (tw / 2) * Math.sin(Math.PI / 4),
-      size,
-      font,
-      color: rgb(0.85, 0.1, 0.1),
-      opacity: 0.18,
-      rotate: degrees(45),
-    });
+    for (const s of watermarkLayout(width, height, img.width, img.height, wm)) {
+      // pdf-lib rotates around the bottom-left corner → shift so the CENTER lands on (cx, cy)
+      page.drawImage(img, {
+        x: s.cx - ((s.w / 2) * cos - (s.h / 2) * sin),
+        y: s.cy - ((s.w / 2) * sin + (s.h / 2) * cos),
+        width: s.w,
+        height: s.h,
+        rotate: degrees(wm.angle),
+        opacity: wm.opacity,
+      });
+    }
   }
   return doc.save();
 }

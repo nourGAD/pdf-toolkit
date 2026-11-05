@@ -1,9 +1,17 @@
 import { PickedFile, baseName, saveOutput } from './lib/files';
 import * as pdf from './lib/pdf';
 import type { PageMode } from './components/PagePicker';
+import { Buffer } from 'buffer';
+import { SIZE_SCALE, type WatermarkImage, type WatermarkSettings } from './components/WatermarkOptions';
 
 /** range = selected pages as "1-3,5" (built from the visual page picker) */
-export type ToolOptions = { range: string; angle: 90 | 180 | 270; text: string };
+export type ToolOptions = {
+  range: string;
+  angle: 90 | 180 | 270;
+  wm: WatermarkSettings;
+  /** the watermark text rendered to PNG by the phone (any language) */
+  wmImage: WatermarkImage | null;
+};
 
 export type ToolResult = {
   uri: string;
@@ -23,7 +31,7 @@ export type Tool = {
   input: 'pdf' | 'pdfs' | 'images';
   /** show the visual page picker */
   pages?: { mode: PageMode; help: string; required?: boolean };
-  fields?: ('angle' | 'text')[];
+  fields?: ('angle' | 'watermark')[];
   /** one-line summary shown in the confirm step */
   summary: (files: PickedFile[], o: ToolOptions, selectedCount: number) => string;
   run: (files: PickedFile[], o: ToolOptions) => Promise<ToolResult>;
@@ -148,12 +156,24 @@ export const TOOLS: Tool[] = [
     id: 'watermark',
     title: 'Watermark',
     titleAr: 'علامة مائية',
-    description: 'Stamp a diagonal text watermark on every page.',
+    description: 'Stamp your own text (Arabic or English) on every page — choose color, size, angle, center or repeat.',
     icon: '💧',
     color: '#D6336C',
     input: 'pdf',
-    fields: ['text'],
-    summary: (_, o) => `Stamp “${o.text}” diagonally on every page.`,
-    run: async ([f], o) => savePdf(await pdf.addWatermark(f, o.text), `${baseName(f.name)}_watermark.pdf`),
+    fields: ['watermark'],
+    summary: (_, o) =>
+      `Stamp “${o.wm.text.trim()}” on every page (${o.wm.layout === 'tile' ? 'repeated' : 'centered'}, ${o.wm.angle}°, ${Math.round(o.wm.opacity * 100)}% opacity).`,
+    run: async ([f], o) => {
+      if (!o.wmImage) throw new Error('Type the watermark text first · اكتب نص العلامة المائية');
+      const png = new Uint8Array(Buffer.from(o.wmImage.base64, 'base64'));
+      const bytes = await pdf.addWatermark(f, {
+        png,
+        opacity: o.wm.opacity,
+        angle: o.wm.angle,
+        scale: SIZE_SCALE[o.wm.size],
+        layout: o.wm.layout,
+      });
+      return savePdf(bytes, `${baseName(f.name)}_watermark.pdf`);
+    },
   },
 ];
