@@ -19,7 +19,7 @@ const script = String.raw`
   lib.GlobalWorkerOptions.workerSrc = ''; // window.pdfjsWorker is present → runs on main thread
   var post = function (m) { window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(m)); };
   var doc = null, pagesEl = document.getElementById('pages'), current = 1, rendered = {}, reading = false;
-  var dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  var dpr = Math.min(window.devicePixelRatio || 1, 2); // sharp enough, half the memory of 3x
 
   function b64ToBytes(b64) {
     var bin = atob(b64), len = bin.length, bytes = new Uint8Array(len);

@@ -48,8 +48,11 @@ export async function recentDocs(): Promise<LibraryDoc[]> {
   return [...(await loadLibrary())].sort((a, b) => b.openedAt - a.openedAt);
 }
 
-/** Add a picked PDF to the library (or return the existing entry for the same file). */
-export async function openInLibrary(file: PickedFile): Promise<LibraryDoc> {
+/**
+ * Add a picked PDF to the library (or return the existing entry for the same file).
+ * move=true: the file is a temporary picker copy → move it (instant, no extra copy of a big file).
+ */
+export async function openInLibrary(file: PickedFile, move = false): Promise<LibraryDoc> {
   const lib = await loadLibrary();
   const src = new File(file.uri);
   const id = `${file.name}_${src.size ?? 0}`.replace(/[^\w.-]+/g, '_');
@@ -60,7 +63,15 @@ export async function openInLibrary(file: PickedFile): Promise<LibraryDoc> {
     return existing;
   }
   const dest = new File(dir(), `${id}.pdf`);
-  if (!dest.exists) src.copySync(dest);
+  if (!dest.exists) {
+    if (move) {
+      try {
+        await src.move(dest);
+      } catch {
+        await src.copy(dest); // different storage volume → fall back to copy
+      }
+    } else await src.copy(dest);
+  }
   const doc: LibraryDoc = {
     id,
     name: file.name,

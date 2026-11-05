@@ -46,14 +46,19 @@ export default function ToolScreen({ tool, onBack, onRead }: Props) {
   // ---------- input ----------
   async function add(source: 'pdf' | 'gallery' | 'scan') {
     try {
-      const picked =
-        source === 'scan' ? await scanDocuments() : source === 'gallery' ? await pickImages() : await pickPdfs(multi);
+      let picked: PickedFile[];
+      let cropAfter = source === 'gallery';
+      if (source === 'scan') {
+        const r = await scanDocuments();
+        picked = r.files;
+        cropAfter = r.needsCrop; // plain-camera fallback → let the user set the 4 corners
+      } else picked = source === 'gallery' ? await pickImages() : await pickPdfs(multi);
       if (!picked.length) return;
       setResult(null);
       setSelected(new Set());
       const startAt = multi ? files.length : 0;
       setFiles((prev) => (multi ? [...prev, ...picked] : picked));
-      if (source === 'gallery') {
+      if (cropAfter) {
         const q = picked.map((_, k) => startAt + k);
         setCropQueue(q);
         setCropTotal(q.length);

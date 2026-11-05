@@ -19,6 +19,12 @@ All libraries are MIT or Apache-2.0, so they're free for commercial use.
 
 `src/reader/pdfjsBundle.ts` is generated from `pdfjs-dist` by `npm install` (postinstall).
 
+## v1.4
+- Removed react-native-document-scanner-plugin entirely (it threw NullPointerException). Android → own ML Kit module; fallback/iOS → camera + 4-corner crop
+- PDF → JPG: separate photos, saved to Gallery (album "PDF Toolkit"); share one photo or ZIP only on request
+- Reader: file is moved (not copied) when opened, loading shows MB read, Retry after 15 s, recovers if WebView crashes
+- Version shown on the home screen
+
 ## v1.3
 - Watermark: any text/language (Arabic shaped correctly via the phone's fonts → PNG), color, size, opacity, angle, center/repeat, live preview
 

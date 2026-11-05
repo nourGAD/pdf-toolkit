@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import appJson from '../../app.json';
 import { TOOLS, Tool } from '../tools';
 import { pickPdfs } from '../lib/files';
 import { LibraryDoc, openInLibrary, recentDocs, removeDoc } from '../lib/library';
@@ -8,6 +9,7 @@ type Props = { onOpen: (t: Tool) => void; onRead: (d: LibraryDoc) => void };
 
 export default function HomeScreen({ onOpen, onRead }: Props) {
   const [recent, setRecent] = useState<LibraryDoc[]>([]);
+  const [opening, setOpening] = useState(false);
   const refresh = useCallback(() => {
     recentDocs().then(setRecent).catch(() => setRecent([]));
   }, []);
@@ -16,9 +18,13 @@ export default function HomeScreen({ onOpen, onRead }: Props) {
   async function openReader() {
     try {
       const [f] = await pickPdfs(false);
-      if (f) onRead(await openInLibrary(f));
+      if (!f) return;
+      setOpening(true);
+      onRead(await openInLibrary(f, true));
     } catch (e: any) {
       Alert.alert('Could not open file', e?.message ?? String(e));
+    } finally {
+      setOpening(false);
     }
   }
 
@@ -44,11 +50,15 @@ export default function HomeScreen({ onOpen, onRead }: Props) {
             <Text style={styles.badgeText}>🔒 Files never leave your phone</Text>
           </View>
 
-          <Pressable style={({ pressed }) => [styles.reader, pressed && { opacity: 0.8 }]} onPress={openReader}>
-            <Text style={styles.readerIcon}>📖</Text>
+          <Pressable
+            style={({ pressed }) => [styles.reader, pressed && { opacity: 0.8 }]}
+            onPress={openReader}
+            disabled={opening}
+          >
+            {opening ? <ActivityIndicator color="#fff" style={{ width: 36 }} /> : <Text style={styles.readerIcon}>📖</Text>}
             <View style={{ flex: 1 }}>
               <Text style={styles.readerTitle}>Read PDF · قراءة</Text>
-              <Text style={styles.readerSub}>Viewer, read aloud 🔊 and bookmarks 🔖</Text>
+              <Text style={styles.readerSub}>{opening ? 'Opening…' : 'Viewer, read aloud 🔊 and bookmarks 🔖'}</Text>
             </View>
             <Text style={styles.readerArrow}>›</Text>
           </Pressable>
@@ -72,6 +82,7 @@ export default function HomeScreen({ onOpen, onRead }: Props) {
           )}
 
           <Text style={[styles.section, { marginTop: 20 }]}>Tools</Text>
+          <Text style={styles.version}>v{appJson.expo.version}</Text>
         </View>
       }
       renderItem={({ item }) => (
@@ -122,6 +133,7 @@ const styles = StyleSheet.create({
   readerTitle: { color: '#fff', fontSize: 17, fontWeight: '800' },
   readerSub: { color: '#D9ECFC', fontSize: 13, marginTop: 2 },
   readerArrow: { color: '#fff', fontSize: 30, marginTop: -4 },
+  version: { position: 'absolute', top: 6, right: 0, fontSize: 12, color: '#B5B9C4', fontWeight: '600' },
   section: { fontSize: 13, fontWeight: '700', color: '#8A8F9C', textTransform: 'uppercase', marginBottom: 8 },
   recent: {
     backgroundColor: '#fff',

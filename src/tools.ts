@@ -19,6 +19,8 @@ export type ToolResult = {
   label: string;
   /** images to show in the result preview (for outputs that aren't a single PDF) */
   previewImages?: string[];
+  /** separate image files (PDF → JPG): saved to Gallery one by one, ZIP only on request */
+  images?: { uri: string; name: string }[];
 };
 
 export type Tool = {
@@ -87,21 +89,22 @@ export const TOOLS: Tool[] = [
     id: 'pdf2jpg',
     title: 'PDF to JPG',
     titleAr: 'PDF إلى صور',
-    description: 'Convert pages to high-quality JPG images, delivered as a ZIP.',
+    description: 'Convert pages to high-quality JPG photos — saved straight to your Gallery.',
     icon: '🖼️',
     color: '#F5B700',
     input: 'pdf',
     pages: { mode: 'select', help: 'اختار الصفحات اللي عايز تحوّلها لصور.\nلو ما اخترتش حاجة، كل الصفحات هتتحول.' },
-    summary: (_, __, n) => `Convert ${pagesText(n)} to JPG images (ZIP).`,
+    summary: (_, __, n) => `Convert ${pagesText(n)} to separate JPG photos.`,
     run: async ([f], o) => {
       const name = baseName(f.name);
       const pages = await pdf.pdfToImages(f, o.range);
-      const zipped = await pdf.zipFiles(pages.map((p) => ({ uri: p.uri, name: `${name}_page_${p.page}.jpg` })));
+      const images = pages.map((p) => ({ uri: p.uri, name: `${name}_page_${p.page}.jpg` }));
       return {
-        uri: saveOutput(zipped, `${name}_images.zip`),
-        mimeType: ZIP,
-        label: `${name}_images.zip`,
-        previewImages: pages.map((p) => p.uri),
+        uri: images[0]?.uri ?? '',
+        mimeType: 'image/jpeg',
+        label: `${images.length} photo${images.length === 1 ? '' : 's'} from ${f.name}`,
+        previewImages: images.map((i) => i.uri),
+        images,
       };
     },
   },

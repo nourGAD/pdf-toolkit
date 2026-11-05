@@ -33,12 +33,17 @@ const WebView = RNWebView as unknown as ComponentType<{
   onMessage: (e: WebViewMessageEvent) => void;
   javaScriptEnabled?: boolean;
   setBuiltInZoomControls?: boolean;
+  onRenderProcessGone?: () => void;
+  onContentProcessDidTerminate?: () => void;
   style?: object;
 }>;
 
 export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack: () => void }) {
   const web = useRef<WebViewHandle>(null);
   const [loading, setLoading] = useState(true);
+  const [loadedMB, setLoadedMB] = useState(0);
+  const [slow, setSlow] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [pages, setPages] = useState(doc.pages);
   const [page, setPage] = useState(doc.lastPage);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(doc.bookmarks);
@@ -59,6 +64,28 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
   const handle = useRef<ReturnType<File['open']> | null>(null);
   const rangeQueue = useRef<{ begin: number; end: number }[]>([]);
   const pumping = useRef(false);
+  const bytesSent = useRef(0);
+
+  // watchdog: tell the user + offer Retry instead of an endless spinner
+  useEffect(() => {
+    if (!loading) return;
+    setSlow(false);
+    const t = setTimeout(() => setSlow(true), 15000);
+    return () => clearTimeout(t);
+  }, [loading, reloadKey]);
+
+  function retry() {
+    rangeQueue.current = [];
+    pumping.current = false;
+    bytesSent.current = 0;
+    try {
+      handle.current?.close();
+    } catch {}
+    handle.current = null;
+    setLoadedMB(0);
+    setLoading(true);
+    setReloadKey((k) => k + 1);
+  }
 
   async function pumpRanges() {
     if (pumping.current) return;
@@ -71,6 +98,8 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
           const len = Math.min(CHUNK, end - pos);
           handle.current.offset = pos;
           const bytes = await handle.current.readBytes(len);
+          bytesSent.current += len;
+          setLoadedMB(bytesSent.current / 1048576);
           js(`window.__chunk(${pos}, "${Buffer.from(bytes).toString('base64')}")`);
           await new Promise((r) => setTimeout(r, 0)); // keep the UI responsive
         }
@@ -220,8 +249,12 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
         </Pressable>
       </View>
 
+      <View style={{ flex: 1 }}>
       <WebView
+        key={reloadKey}
         ref={web}
+        onRenderProcessGone={() => (setLoading(true), setSlow(true))}
+        onContentProcessDidTerminate={() => (setLoading(true), setSlow(true))}
         source={{ html: READER_HTML }}
         originWhitelist={['*']}
         onMessage={onMessage}
@@ -231,9 +264,22 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
       />
       {loading && (
         <View style={styles.loading}>
-          <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" color="#1F8FE5" />
+          <Text style={styles.loadingText}>
+            Opening… {loadedMB >= 0.1 ? `${loadedMB.toFixed(1)} MB read` : ''}
+          </Text>
+          {slow && (
+            <View style={styles.slowBox}>
+              <Text style={styles.slowText}>This is taking longer than usual · الملف بياخد وقت أطول من العادي</Text>
+              <Pressable style={styles.smallBtn} onPress={retry}>
+                <Text style={styles.smallBtnText}>↻ Retry</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       )}
+
+      </View>
 
       {/* bottom bar */}
       <View style={styles.bottom}>
@@ -387,7 +433,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   web: { flex: 1, backgroundColor: '#E9EBF0' },
-  loading: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
+  loading: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
+  loadingText: { color: '#5B6170', fontWeight: '600' },
+  slowBox: { alignItems: 'center', gap: 10, marginTop: 8 },
+  slowText: { color: '#5B6170', textAlign: 'center' },
   bottom: {
     flexDirection: 'row',
     backgroundColor: '#fff',

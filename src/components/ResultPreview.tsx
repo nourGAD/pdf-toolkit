@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import PdfThumbnail from 'react-native-pdf-thumbnail';
 import { File } from 'expo-file-system';
 import { ToolResult } from '../tools';
+import { saveImagesToGallery } from '../lib/gallery';
+import { saveOutput, shareFile } from '../lib/files';
+import { zipFiles } from '../lib/pdf';
 
 const MAX_PREVIEW = 60;
 
@@ -21,9 +24,38 @@ export default function ResultPreview({
   onAgain: () => void;
 }) {
   const isPdf = result.mimeType === 'application/pdf';
+  const isPhotos = !!result.images;
   const [images, setImages] = useState<string[] | null>(result.previewImages ?? null);
   const [total, setTotal] = useState<number | null>(result.previewImages?.length ?? null);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedCount, setSavedCount] = useState<number | null>(null);
+  const photos = result.images;
+
+  async function saveToGallery() {
+    if (!photos) return;
+    setSaving(true);
+    try {
+      setSavedCount(await saveImagesToGallery(photos));
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message ?? String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function shareZip() {
+    if (!photos) return;
+    setSaving(true);
+    try {
+      const uri = saveOutput(await zipFiles(photos), result.label.replace(/\W+/g, '_') + '.zip');
+      await shareFile(uri, 'application/zip');
+    } catch (e: any) {
+      Alert.alert('Share failed', e?.message ?? String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
   const { width } = useWindowDimensions();
   const size = (width - 40 - 20) / 3;
 
@@ -44,7 +76,9 @@ export default function ResultPreview({
 
   const sizeKb = (() => {
     try {
-      const b = new File(result.uri).size ?? 0;
+      const b = isPhotos
+        ? (result.images ?? []).reduce((t, i) => t + (new File(i.uri).size ?? 0), 0)
+        : (new File(result.uri).size ?? 0);
       return b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
     } catch {
       return '';
@@ -84,10 +118,36 @@ export default function ResultPreview({
         <Text style={styles.more}>+ {total - MAX_PREVIEW} more pages — open it in the reader to see everything.</Text>
       )}
 
-      <Pressable style={[styles.cta, { backgroundColor: color }]} onPress={onShare}>
-        <Text style={styles.ctaText}>Save / Share</Text>
-      </Pressable>
+      {photos ? (
+        <>
+          <Pressable
+            style={[styles.cta, { backgroundColor: savedCount != null ? '#2BA84A' : color }]}
+            onPress={saveToGallery}
+            disabled={saving || savedCount != null}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.ctaText}>
+                {savedCount != null
+                  ? `✓ ${savedCount} photos saved to Gallery › PDF Toolkit`
+                  : `💾 Save ${photos.length} photo${photos.length === 1 ? '' : 's'} to Gallery`}
+              </Text>
+            )}
+          </Pressable>
+          <Text style={styles.tip}>Tap any photo to view or share it alone · دوس على أي صورة عشان تبعتها لوحدها</Text>
+        </>
+      ) : (
+        <Pressable style={[styles.cta, { backgroundColor: color }]} onPress={onShare}>
+          <Text style={styles.ctaText}>Save / Share</Text>
+        </Pressable>
+      )}
       <View style={styles.row}>
+        {photos && photos.length > 1 && (
+          <Pressable style={styles.secondary} onPress={shareZip} disabled={saving}>
+            <Text style={styles.secondaryText}>📦 Share as ZIP</Text>
+          </Pressable>
+        )}
         {isPdf && onOpenReader && (
           <Pressable style={styles.secondary} onPress={onOpenReader}>
             <Text style={styles.secondaryText}>📖 Open in reader</Text>
@@ -101,7 +161,18 @@ export default function ResultPreview({
       <Modal visible={!!zoom} transparent animationType="fade" onRequestClose={() => setZoom(null)}>
         <Pressable style={styles.zoomBg} onPress={() => setZoom(null)}>
           {zoom && <Image source={{ uri: zoom }} style={styles.zoomImg} resizeMode="contain" />}
-          <Text style={styles.zoomHint}>Tap to close</Text>
+          {zoom && photos && (
+            <Pressable
+              style={styles.zoomShare}
+              onPress={() => {
+                const p = photos.find((x) => x.uri === zoom);
+                if (p) shareFile(p.uri, 'image/jpeg').catch((e) => Alert.alert('Share failed', e.message));
+              }}
+            >
+              <Text style={styles.zoomShareText}>Share this photo</Text>
+            </Pressable>
+          )}
+          <Text style={styles.zoomHint}>Tap outside to close</Text>
         </Pressable>
       </Modal>
     </View>
@@ -124,4 +195,7 @@ const styles = StyleSheet.create({
   zoomBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   zoomImg: { width: '94%', height: '84%' },
   zoomHint: { color: '#AAB0BC', marginTop: 12 },
+  zoomShare: { marginTop: 14, backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 22, paddingVertical: 10 },
+  zoomShareText: { fontWeight: '800', color: '#1B1E28' },
+  tip: { fontSize: 12, color: '#8A8F9C', marginTop: 8, textAlign: 'center' },
 });
