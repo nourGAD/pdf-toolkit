@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nourgad.pdftoolkit",
+      "bundleIdentifier": "pdf.toolkit",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Choose photos to convert into a PDF.",
         "ITSAppUsesNonExemptEncryption": false,
@@ -23,7 +23,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.nourgad.pdftoolkit",
+      "package": "pdf.toolkit",
       "permissions": []
     },
     "web": {
