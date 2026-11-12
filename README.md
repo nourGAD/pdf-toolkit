@@ -22,7 +22,8 @@ All libraries are MIT or Apache-2.0, so they're free for commercial use.
 ## v1.8
 - Read aloud: Arabic PDFs are read in the correct order (shared line builder `src/reader/textLines.ts`, also used by PDF → Word)
 - "What's new" card after each update
-- One-click Play build from GitHub: Actions → **Build Android (.aab)** (needs the `EXPO_TOKEN` secret)
+- Build the .aab + a test APK on **GitHub Actions without EAS credits**: Actions → **Build Android (.aab)** (needs the 4 `ANDROID_*` signing secrets — see the top of `.github/workflows/build-android.yml`)
+- Dark mode follows the phone correctly (expo-system-ui)
 - `eas submit` goes to the Closed testing track (`alpha`) by default
 
 ## v1.7
