@@ -5,6 +5,7 @@ import { WebView as RNWebView } from 'react-native-webview';
 import PdfThumbnail from 'react-native-pdf-thumbnail';
 import { TEXT_IMAGE_HTML } from '../watermark/textImageHtml';
 import { watermarkLayout } from '../lib/pdf';
+import { Theme, useStyles, useTheme } from '../theme';
 
 type WebViewHandle = { injectJavaScript: (code: string) => void };
 const WebView = RNWebView as unknown as ComponentType<{
@@ -61,6 +62,8 @@ export default function WatermarkOptions({
   onImage: (img: WatermarkImage | null) => void;
   color: string;
 }) {
+  const styles = useStyles(makeStyles);
+  const { theme } = useTheme();
   const web = useRef<WebViewHandle>(null);
   const [ready, setReady] = useState(false);
   const [img, setImg] = useState<WatermarkImage | null>(null);
@@ -121,6 +124,7 @@ export default function WatermarkOptions({
 
       <Text style={styles.label}>Watermark text · اكتب أي حاجة (عربي أو إنجليزي)</Text>
       <TextInput
+        placeholderTextColor={theme.muted}
         style={styles.input}
         value={value.text}
         onChangeText={(text) => set({ text })}
@@ -167,7 +171,7 @@ export default function WatermarkOptions({
         {page ? (
           <Image source={{ uri: page.uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
         ) : (
-          <ActivityIndicator style={{ marginTop: boxH / 2 - 10 }} />
+          <ActivityIndicator style={{ marginTop: boxH / 2 - 10 }} color={theme.accent} />
         )}
         {img &&
           stamps.map((s, i) => (
@@ -203,6 +207,7 @@ function Seg<T extends string | number>({
   onPick: (v: T) => void;
   color: string;
 }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={{ marginTop: 12 }}>
       <Text style={styles.label}>{label}</Text>
@@ -220,14 +225,16 @@ function Seg<T extends string | number>({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: Theme) =>
+  StyleSheet.create({
   hidden: { position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' },
-  label: { fontSize: 13, fontWeight: '700', color: '#5B6170', marginBottom: 6 },
+  label: { fontSize: 13, fontWeight: '700', color: t.sub, marginBottom: 6 },
   input: {
-    backgroundColor: '#fff',
+    color: t.text,
+    backgroundColor: t.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E1E4EC',
+    borderColor: t.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 17,
@@ -235,17 +242,17 @@ const styles = StyleSheet.create({
     textAlign: 'auto',
   },
   presets: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, marginBottom: 12 },
-  preset: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E1E4EC', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
-  presetText: { fontSize: 13, color: '#1B1E28', fontWeight: '600' },
+  preset: { backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  presetText: { fontSize: 13, color: t.text, fontWeight: '600' },
   row: { flexDirection: 'row', gap: 10 },
-  swatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff' },
-  swatchOn: { borderColor: '#1B1E28' },
-  seg: { flexDirection: 'row', backgroundColor: '#E9EBF0', borderRadius: 12, padding: 3, gap: 3 },
+  swatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, borderColor: t.card },
+  swatchOn: { borderColor: t.text },
+  seg: { flexDirection: 'row', backgroundColor: t.bg2, borderRadius: 12, padding: 3, gap: 3 },
   segBtn: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10 },
-  segText: { fontSize: 14, fontWeight: '700', color: '#1B1E28' },
+  segText: { fontSize: 14, fontWeight: '700', color: t.text },
   preview: {
     alignSelf: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: t.card,
     borderRadius: 6,
     overflow: 'hidden',
     shadowColor: '#000',

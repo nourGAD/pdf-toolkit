@@ -19,6 +19,31 @@ All libraries are MIT or Apache-2.0, so they're free for commercial use.
 
 `src/reader/pdfjsBundle.ts` is generated from `pdfjs-dist` by `npm install` (postinstall).
 
+## v1.8
+- Read aloud: Arabic PDFs are read in the correct order (shared line builder `src/reader/textLines.ts`, also used by PDF → Word)
+- "What's new" card after each update
+- One-click Play build from GitHub: Actions → **Build Android (.aab)** (needs the `EXPO_TOKEN` secret)
+- `eas submit` goes to the Closed testing track (`alpha`) by default
+
+## v1.7
+- Crash reporting (Sentry) — OFF until you put a DSN in `app.json → expo.extra.sentryDsn`. No file data is ever sent.
+- "Open with" / "Share" for PDF & Word from other apps; home-screen **Scan widget** (`pdftoolkit://scan`); rating prompt after the 3rd success
+- New tools: Compress PDF, OCR (photo → text, searchable PDF; Arabic + English, fully offline via tesseract.js),
+  Word → PDF (mammoth + expo-print), PDF → Word (text, RTL-aware), Protect / Unlock (AES-256, @cantoo/pdf-lib),
+  Fill forms (Arabic answers drawn as images), Reorder pages (tap or hold-and-drag)
+- Tool search on the home screen; heavy work runs in hidden WebView engines (`src/engines/EngineHost.tsx`)
+
+## v1.6
+- Sign PDF: finger signature pad (`src/edit/signatureHtml.ts`), saved signatures, place/resize, copy to all pages
+- Edit PDF: add text (any language, rendered via phone fonts) and images; drag/resize; handles rotated pages (`src/lib/edit.ts`)
+- Remove watermark (`src/lib/unwatermark.ts`): Word/Acrobat artifacts, watermark annotations, layers (OCG),
+  repeated images/stamps, rotated repeated text, or any typed text — with before/after preview
+
+## v1.5
+- Word (.docx) reader: mammoth.js offline (`src/docx`), dark mode, A−/A+, read aloud with paragraph highlight, resume position
+- Dark mode for the whole app (🌙 on Home, follows phone by default) + PDF night mode (inverted pages)
+- Compress images tool: Strong / Medium / Light, before → after size, save to Gallery
+
 ## v1.4
 - Removed react-native-document-scanner-plugin entirely (it threw NullPointerException). Android → own ML Kit module; fallback/iOS → camera + 4-corner crop
 - PDF → JPG: separate photos, saved to Gallery (album "PDF Toolkit"); share one photo or ZIP only on request

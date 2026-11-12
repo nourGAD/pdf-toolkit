@@ -1,4 +1,5 @@
 import { PDFJS_LIB, PDFJS_WORKER } from './pdfjsBundle';
+import { TEXT_LINES_JS } from './textLines';
 
 /**
  * Offline PDF viewer that runs inside a WebView using pdf.js (main-thread "fake worker").
@@ -90,7 +91,7 @@ const script = String.raw`
     });
   }
   function onFail(e) {
-    post({ type: 'error', message: e && e.name === 'PasswordException' ? 'This PDF is password-protected' : String(e && e.message || e) });
+    post({ type: 'error', message: e && e.name === 'PasswordException' ? 'This PDF is password-protected. Use the “Unlock PDF” tool first (you need the password).' : String(e && e.message || e) });
   }
 
   // Large-file mode: pdf.js asks for byte ranges, the app reads only those pieces from disk.
@@ -121,13 +122,13 @@ const script = String.raw`
   };
 
   window.__highlight = function (on) { reading = !!on; markReading(); };
+  // night mode: invert page colours (white paper → dark), hue-rotate keeps photos/colours natural
+  window.__setDark = function (on) { document.documentElement.classList.toggle('dark', !!on); };
 
   window.__getText = function (n, reqId) {
-    doc.getPage(n).then(function (page) { return page.getTextContent(); }).then(function (tc) {
-      var text = '';
-      tc.items.forEach(function (it) { if (it.str !== undefined) text += it.str + (it.hasEOL ? '\n' : ' '); });
-      // Arabic presentation forms (ﻣ ﺮ ﺣ) → normal letters so the TTS engine can read them
-      text = text.normalize('NFKC').replace(/[ \t]+/g, ' ').trim();
+    doc.getPage(n).then(function (page) { return page.getTextContent({ disableNormalization: true }); }).then(function (tc) {
+      // rebuild lines in reading order (fixes reversed / per-letter Arabic in many PDFs), NFKC applied inside
+      var text = window.buildLines(tc.items).map(function (l) { return l.text; }).join('\n').trim();
       post({ type: 'text', page: n, text: text, reqId: reqId });
     }).catch(function (e) { post({ type: 'text', page: n, text: '', reqId: reqId, error: String(e) }); });
   };
@@ -147,9 +148,14 @@ export const READER_HTML = `<!DOCTYPE html>
   .page.reading{box-shadow:0 0 0 3px #1F8FE5}
   .page span{color:#B5B9C4;font:600 28px -apple-system,Roboto,sans-serif}
   .page canvas{width:100%;height:auto;display:block}
+  html.dark,html.dark body{background:#0E0F12}
+  html.dark .page{background:#1A1C22;box-shadow:0 1px 4px rgba(0,0,0,.6)}
+  html.dark .page canvas{filter:invert(.92) hue-rotate(180deg)}
+  html.dark .page span{color:#5A606C}
 </style>
 <script>${PDFJS_WORKER}</script>
 <script>${PDFJS_LIB}</script>
 </head><body><div id="pages"></div>
+<script>${TEXT_LINES_JS}</script>
 <script>${script}</script>
 </body></html>`;

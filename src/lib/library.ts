@@ -6,8 +6,20 @@ import { PickedFile } from './files';
  * Stored as JSON in the app's documents folder — offline, nothing synced.
  */
 export type Bookmark = { id: string; page: number; label: string; createdAt: number };
+export type DocKind = 'pdf' | 'docx';
+export const kindOf = (name: string, mime?: string): DocKind | 'doc' | null => {
+  const n = name.toLowerCase();
+  if (n.endsWith('.pdf') || mime === 'application/pdf') return 'pdf';
+  if (n.endsWith('.docx') || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
+  if (n.endsWith('.doc') || mime === 'application/msword') return 'doc';
+  return null;
+};
+
 export type LibraryDoc = {
   id: string;
+  kind?: DocKind; // missing on entries saved before v1.5 → pdf
+  /** Word reader: scroll position 0..1 */
+  pos?: number;
   name: string;
   uri: string; // copy inside app storage (picker cache can be wiped by the OS)
   pages: number;
@@ -62,7 +74,8 @@ export async function openInLibrary(file: PickedFile, move = false): Promise<Lib
     persist();
     return existing;
   }
-  const dest = new File(dir(), `${id}.pdf`);
+  const kind = (kindOf(file.name, file.mimeType) === 'docx' ? 'docx' : 'pdf') as DocKind;
+  const dest = new File(dir(), `${id}.${kind}`);
   if (!dest.exists) {
     if (move) {
       try {
@@ -75,6 +88,7 @@ export async function openInLibrary(file: PickedFile, move = false): Promise<Lib
   const doc: LibraryDoc = {
     id,
     name: file.name,
+    kind,
     uri: dest.uri,
     pages: 0,
     lastPage: 1,

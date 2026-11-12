@@ -16,12 +16,39 @@ export async function pickPdfs(multiple: boolean): Promise<PickedFile[]> {
   return res.assets.map((a) => ({ uri: a.uri, name: a.name, mimeType: a.mimeType ?? undefined }));
 }
 
+/** Pick a Word (.docx) file. */
+export async function pickDocx(): Promise<PickedFile[]> {
+  const res = await DocumentPicker.getDocumentAsync({
+    type: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'],
+    copyToCacheDirectory: true,
+  });
+  if (res.canceled || !res.assets[0]) return [];
+  const a = res.assets[0];
+  if (/\.doc$/i.test(a.name)) throw new Error('Old Word format (.doc). Save it as .docx first, then try again.');
+  return [{ uri: a.uri, name: a.name, mimeType: a.mimeType ?? undefined }];
+}
+
+/** Pick a PDF or Word document for the reader. */
+export async function pickDocument(): Promise<PickedFile | null> {
+  const res = await DocumentPicker.getDocumentAsync({
+    type: [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+    ],
+    copyToCacheDirectory: true,
+  });
+  if (res.canceled || !res.assets[0]) return null;
+  const a = res.assets[0];
+  return { uri: a.uri, name: a.name, mimeType: a.mimeType ?? undefined };
+}
+
 /** Pick images from the gallery (JPG/PNG). */
-export async function pickImages(): Promise<PickedFile[]> {
+export async function pickImages(quality = 0.9): Promise<PickedFile[]> {
   const res = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsMultipleSelection: true,
-    quality: 0.9,
+    quality, // 1 = keep the original file (used by Compress, so "before" sizes are real)
   });
   if (res.canceled) return [];
   return res.assets.map((a, i) => ({
@@ -63,6 +90,14 @@ function outputDir(): Directory {
 /** Save bytes to the output folder and return the new file URI. */
 export function saveOutput(bytes: Uint8Array, fileName: string): string {
   const file = new File(outputDir(), uniqueName(fileName));
+  file.create({ overwrite: true });
+  file.write(bytes);
+  return file.uri;
+}
+
+/** Temporary file (previews) — kept out of the user's output folder. */
+export function saveTemp(bytes: Uint8Array, fileName: string): string {
+  const file = new File(Paths.cache, uniqueName(fileName));
   file.create({ overwrite: true });
   file.write(bytes);
   return file.uri;

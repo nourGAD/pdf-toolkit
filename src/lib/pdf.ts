@@ -78,6 +78,17 @@ export async function splitAllToZip(file: PickedFile, baseName: string): Promise
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 
+/** Rebuild the PDF with pages in a new order. `order` holds the original 0-based page indexes. */
+export async function reorderPages(file: PickedFile, order: number[]): Promise<Uint8Array> {
+  const src = await load(file);
+  const total = src.getPageCount();
+  if (!order.length || order.some((i) => i < 0 || i >= total)) throw new Error('Invalid page order');
+  const out = await PDFDocument.create();
+  const pages = await out.copyPages(src, order);
+  pages.forEach((p) => out.addPage(p));
+  return out.save();
+}
+
 export async function deletePages(file: PickedFile, range: string): Promise<Uint8Array> {
   const doc = await load(file);
   const total = doc.getPageCount();

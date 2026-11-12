@@ -1,4 +1,5 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Theme, useStyles, useTheme } from '../theme';
 
 /** "Are you sure?" step: shows exactly what will happen before processing starts. */
 export default function ConfirmSheet({
@@ -18,6 +19,7 @@ export default function ConfirmSheet({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const styles = useStyles(makeStyles);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
       <View style={styles.bg}>
@@ -50,17 +52,18 @@ export default function ConfirmSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  bg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 36 },
-  title: { fontSize: 20, fontWeight: '800', color: '#1B1E28' },
-  sub: { fontSize: 13, color: '#8A8F9C', marginTop: 2 },
-  box: { backgroundColor: '#F6F7FB', borderRadius: 14, padding: 14, marginTop: 14, gap: 6 },
-  line: { fontSize: 15, color: '#1B1E28', lineHeight: 21 },
+const makeStyles = (t: Theme) =>
+  StyleSheet.create({
+  bg: { flex: 1, backgroundColor: t.overlay },
+  sheet: { backgroundColor: t.card, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 36 },
+  title: { fontSize: 20, fontWeight: '800', color: t.text },
+  sub: { fontSize: 13, color: t.muted, marginTop: 2 },
+  box: { backgroundColor: t.bg, borderRadius: 14, padding: 14, marginTop: 14, gap: 6 },
+  line: { fontSize: 15, color: t.text, lineHeight: 21 },
   note: { fontSize: 12, color: '#1E7B3A', marginTop: 12 },
   row: { flexDirection: 'row', gap: 10, marginTop: 18 },
   btn: { flex: 1, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
-  cancel: { backgroundColor: '#EEF0F4' },
-  cancelText: { fontSize: 16, fontWeight: '700', color: '#1B1E28' },
+  cancel: { backgroundColor: t.card2 },
+  cancelText: { fontSize: 16, fontWeight: '700', color: t.text },
   okText: { fontSize: 16, fontWeight: '800', color: '#fff' },
 });

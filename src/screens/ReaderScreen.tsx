@@ -19,6 +19,7 @@ import { File } from 'expo-file-system';
 import { Buffer } from 'buffer';
 import { READER_HTML } from '../reader/readerHtml';
 import { Bookmark, LibraryDoc, addBookmark, removeBookmark, updateDoc } from '../lib/library';
+import { Theme, useStyles, useTheme } from '../theme';
 
 const RATES = [0.8, 1, 1.25, 1.5] as const;
 const CHUNK = 512 * 1024; // bytes sent to the viewer per message
@@ -39,6 +40,8 @@ const WebView = RNWebView as unknown as ComponentType<{
 }>;
 
 export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack: () => void }) {
+  const styles = useStyles(makeStyles);
+  const { theme, cycle } = useTheme();
   const web = useRef<WebViewHandle>(null);
   const [loading, setLoading] = useState(true);
   const [loadedMB, setLoadedMB] = useState(0);
@@ -138,6 +141,7 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
           pumpRanges();
           break;
         case 'loaded':
+          js(`window.__setDark(${theme.dark})`);
           setLoading(false);
           setPages(m.pages);
           updateDoc(doc.id, { pages: m.pages });
@@ -156,8 +160,12 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
           break;
       }
     },
-    [doc.id, doc.uri, doc.lastPage],
+    [doc.id, doc.uri, doc.lastPage, theme.dark],
   );
+
+  useEffect(() => {
+    js(`window.__setDark(${theme.dark})`);
+  }, [theme.dark]);
 
   // ---- read aloud ----
   const getText = (p: number) =>
@@ -190,7 +198,7 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
         if (++emptyRun >= 3) {
           Alert.alert(
             'No text found',
-            'These pages look like scanned images, so there is no text to read. OCR support is coming in a later update.',
+            'These pages look like scanned images, so there is no text to read. Use the “OCR PDF (searchable)” tool first, then open the new file here.',
           );
           break;
         }
@@ -242,6 +250,9 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
         <Text style={styles.title} numberOfLines={1}>
           {doc.name}
         </Text>
+        <Pressable onPress={cycle} hitSlop={8} accessibilityLabel="Toggle dark mode">
+          <Text style={styles.moon}>{theme.dark ? '☀️' : '🌙'}</Text>
+        </Pressable>
         <Pressable onPress={() => setShowMarks(true)} hitSlop={8}>
           <Text style={styles.pageNo}>
             {page} / {pages || '…'}
@@ -264,7 +275,7 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
       />
       {loading && (
         <View style={styles.loading}>
-          <ActivityIndicator size="large" color="#1F8FE5" />
+          <ActivityIndicator size="large" color={theme.accent} />
           <Text style={styles.loadingText}>
             Opening… {loadedMB >= 0.1 ? `${loadedMB.toFixed(1)} MB read` : ''}
           </Text>
@@ -316,6 +327,7 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
             <Text style={styles.sheetTitle}>Bookmarks</Text>
             <View style={styles.gotoRow}>
               <TextInput
+                placeholderTextColor={theme.muted}
                 style={[styles.input, { flex: 1 }]}
                 placeholder={`Go to page (1–${pages})`}
                 keyboardType="number-pad"
@@ -369,6 +381,7 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
           <View style={styles.dialog}>
             <Text style={styles.sheetTitle}>Bookmark page {page}</Text>
             <TextInput
+                placeholderTextColor={theme.muted}
               style={styles.input}
               placeholder="Name (optional) — e.g. Chapter 3"
               value={newMark ?? ''}
@@ -409,73 +422,76 @@ function chunks(text: string, max: number): string[] {
   return out;
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#E9EBF0' },
+const makeStyles = (t: Theme) =>
+  StyleSheet.create({
+  root: { flex: 1, backgroundColor: t.bg2 },
   top: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    backgroundColor: t.card,
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#D5D8E0',
+    borderColor: t.border,
   },
-  back: { fontSize: 30, color: '#1F8FE5', marginTop: -4 },
-  title: { flex: 1, fontSize: 16, fontWeight: '700', color: '#1B1E28' },
+  back: { fontSize: 30, color: t.accent, marginTop: -4 },
+  title: { flex: 1, fontSize: 16, fontWeight: '700', color: t.text },
+  moon: { fontSize: 20 },
   pageNo: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1F8FE5',
-    backgroundColor: '#E8F2FC',
+    color: t.accent,
+    backgroundColor: t.accentSoft,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
   },
-  web: { flex: 1, backgroundColor: '#E9EBF0' },
+  web: { flex: 1, backgroundColor: t.bg2 },
   loading: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  loadingText: { color: '#5B6170', fontWeight: '600' },
+  loadingText: { color: t.sub, fontWeight: '600' },
   slowBox: { alignItems: 'center', gap: 10, marginTop: 8 },
-  slowText: { color: '#5B6170', textAlign: 'center' },
+  slowText: { color: t.sub, textAlign: 'center' },
   bottom: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: t.card,
     paddingHorizontal: 8,
     paddingVertical: 8,
     gap: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: '#D5D8E0',
+    borderColor: t.border,
   },
   btn: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 12 },
-  play: { backgroundColor: '#1F8FE5', flex: 1.3 },
+  play: { backgroundColor: t.accent, flex: 1.3 },
   btnIcon: { fontSize: 18 },
-  btnText: { fontSize: 11, color: '#5B6170', marginTop: 2, fontWeight: '600' },
-  sheetWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
-  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: 36 },
-  sheetTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12, color: '#1B1E28' },
+  btnText: { fontSize: 11, color: t.sub, marginTop: 2, fontWeight: '600' },
+  sheetWrap: { flex: 1, backgroundColor: t.overlay },
+  sheet: { backgroundColor: t.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: 36 },
+  sheetTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12, color: t.text },
   gotoRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8 },
   input: {
+    color: t.text,
     borderWidth: 1,
-    borderColor: '#E1E4EC',
+    borderColor: t.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 15,
   },
-  smallBtn: { backgroundColor: '#1F8FE5', borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11 },
+  smallBtn: { backgroundColor: t.accent, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11 },
   smallBtnText: { color: '#fff', fontWeight: '700' },
-  empty: { color: '#8A8F9C', paddingVertical: 16, textAlign: 'center' },
+  empty: { color: t.muted, paddingVertical: 16, textAlign: 'center' },
   mark: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E1E4EC',
+    borderColor: t.border,
   },
-  markPage: { fontWeight: '800', color: '#1F8FE5', width: 54 },
-  markLabel: { flex: 1, fontSize: 15, color: '#1B1E28' },
+  markPage: { fontWeight: '800', color: t.accent, width: 54 },
+  markLabel: { flex: 1, fontSize: 15, color: t.text },
   del: { color: '#C0392B', fontSize: 16 },
-  center: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  dialog: { backgroundColor: '#fff', borderRadius: 18, padding: 18, alignSelf: 'stretch' },
+  center: { flex: 1, backgroundColor: t.overlay, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  dialog: { backgroundColor: t.card, borderRadius: 18, padding: 18, alignSelf: 'stretch' },
 });

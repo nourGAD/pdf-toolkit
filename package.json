@@ -3,17 +3,24 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@cantoo/pdf-lib": "^2.11.1",
+    "@sentry/react-native": "^8.34.0",
     "buffer": "^6.0.3",
     "expo": "~58.0.23",
+    "expo-clipboard": "^58.0.4",
+    "expo-crypto": "^58.0.7",
     "expo-dev-client": "~58.0.18",
     "expo-document-picker": "~58.0.4",
     "expo-file-system": "~58.0.13",
     "expo-image-manipulator": "~58.0.16",
     "expo-image-picker": "~58.0.10",
     "expo-media-library": "~58.0.0",
+    "expo-print": "~58.0.8",
     "expo-sharing": "~58.0.22",
     "expo-speech": "~58.0.3",
     "expo-status-bar": "~58.0.4",
+    "expo-store-review": "~58.0.2",
+    "html-entities": "^2.6.0",
     "jszip": "^3.10.2",
     "pdf-lib": "^1.17.1",
     "react": "19.3.0",
@@ -23,8 +30,12 @@
     "react-native-webview": "^14.0.1"
   },
   "devDependencies": {
+    "@tesseract.js-data/ara": "^1.0.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "@types/react": "~19.3.0",
+    "mammoth": "^1.13.0",
     "pdfjs-dist": "^3.11.174",
+    "tesseract.js": "^7.0.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
