@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import PdfThumbnail from 'react-native-pdf-thumbnail';
 import { File } from 'expo-file-system';
 import { ToolResult } from '../tools';
 import { saveImagesToGallery } from '../lib/gallery';
 import { saveOutput, shareFile } from '../lib/files';
 import { zipFiles } from '../lib/pdf';
+import { Theme, useStyles, useTheme } from '../theme';
 
 const MAX_PREVIEW = 60;
 
@@ -23,9 +25,12 @@ export default function ResultPreview({
   onOpenReader?: () => void;
   onAgain: () => void;
 }) {
+  const styles = useStyles(makeStyles);
   const isPdf = result.mimeType === 'application/pdf';
+  const isDocx = /wordprocessingml/.test(result.mimeType);
+  const [copied, setCopied] = useState(false);
   const isPhotos = !!result.images;
-  const [images, setImages] = useState<string[] | null>(result.previewImages ?? null);
+  const [images, setImages] = useState<string[] | null>(result.previewImages ?? (isPdf ? null : []));
   const [total, setTotal] = useState<number | null>(result.previewImages?.length ?? null);
   const [zoom, setZoom] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -38,7 +43,12 @@ export default function ResultPreview({
     try {
       setSavedCount(await saveImagesToGallery(photos));
     } catch (e: any) {
-      Alert.alert('Could not save', e?.message ?? String(e));
+      Alert.alert('Could not save to Gallery', e?.message ?? String(e), [
+        { text: 'OK', style: 'cancel' },
+        photos.length === 1
+          ? { text: 'Share instead', onPress: () => shareFile(photos[0].uri, 'image/jpeg').catch(() => {}) }
+          : { text: 'Share as ZIP', onPress: () => shareZip() },
+      ]);
     } finally {
       setSaving(false);
     }
@@ -76,6 +86,7 @@ export default function ResultPreview({
 
   const sizeKb = (() => {
     try {
+      if (result.mimeType === 'text/plain') return '';
       const b = isPhotos
         ? (result.images ?? []).reduce((t, i) => t + (new File(i.uri).size ?? 0), 0)
         : (new File(result.uri).size ?? 0);
@@ -94,6 +105,33 @@ export default function ResultPreview({
         {sizeKb ? `  ·  ${sizeKb}` : ''}
       </Text>
 
+      {result.text != null && (
+        <View style={styles.textBox}>
+          <ScrollView style={{ maxHeight: 320 }} nestedScrollEnabled>
+            <Text selectable style={styles.text}>
+              {result.text.trim() || '(no text found)'}
+            </Text>
+          </ScrollView>
+          <View style={styles.row}>
+            <Pressable
+              style={styles.secondary}
+              onPress={async () => {
+                await Clipboard.setStringAsync(result.text ?? '');
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1800);
+              }}
+            >
+              <Text style={styles.secondaryText}>{copied ? '✓ Copied' : '📋 Copy text'}</Text>
+            </Pressable>
+            {result.textUri && (
+              <Pressable style={styles.secondary} onPress={() => shareFile(result.textUri!, 'text/plain').catch(() => {})}>
+                <Text style={styles.secondaryText}>📄 Share .txt</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      )}
+
       {images === null ? (
         <ActivityIndicator style={{ marginVertical: 24 }} color={color} />
       ) : images.length ? (
@@ -111,8 +149,8 @@ export default function ResultPreview({
             </Pressable>
           )}
         />
-      ) : (
-        <Text style={styles.noPreview}>📦 Preview not available for this file type.</Text>
+      ) : result.text != null ? null : (
+        <Text style={styles.noPreview}>{isDocx ? '📝 Word document ready — open it to check.' : '📦 Preview not available for this file type.'}</Text>
       )}
       {total != null && total > MAX_PREVIEW && (
         <Text style={styles.more}>+ {total - MAX_PREVIEW} more pages — open it in the reader to see everything.</Text>
@@ -130,25 +168,25 @@ export default function ResultPreview({
             ) : (
               <Text style={styles.ctaText}>
                 {savedCount != null
-                  ? `✓ ${savedCount} photos saved to Gallery › PDF Toolkit`
+                  ? `✓ ${savedCount} photo${savedCount === 1 ? '' : 's'} saved to your Gallery`
                   : `💾 Save ${photos.length} photo${photos.length === 1 ? '' : 's'} to Gallery`}
               </Text>
             )}
           </Pressable>
           <Text style={styles.tip}>Tap any photo to view or share it alone · دوس على أي صورة عشان تبعتها لوحدها</Text>
         </>
-      ) : (
+      ) : result.uri && result.mimeType !== 'text/plain' ? (
         <Pressable style={[styles.cta, { backgroundColor: color }]} onPress={onShare}>
           <Text style={styles.ctaText}>Save / Share</Text>
         </Pressable>
-      )}
+      ) : null}
       <View style={styles.row}>
         {photos && photos.length > 1 && (
           <Pressable style={styles.secondary} onPress={shareZip} disabled={saving}>
             <Text style={styles.secondaryText}>📦 Share as ZIP</Text>
           </Pressable>
         )}
-        {isPdf && onOpenReader && (
+        {(isPdf || isDocx) && onOpenReader && (
           <Pressable style={styles.secondary} onPress={onOpenReader}>
             <Text style={styles.secondaryText}>📖 Open in reader</Text>
           </Pressable>
@@ -179,23 +217,26 @@ export default function ResultPreview({
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { marginTop: 24, backgroundColor: '#fff', borderRadius: 18, padding: 16 },
-  title: { fontSize: 18, fontWeight: '800', color: '#1B1E28' },
-  meta: { fontSize: 13, color: '#8A8F9C', marginTop: 4 },
-  cell: { backgroundColor: '#EEF0F4', borderRadius: 10, padding: 4, alignItems: 'center' },
-  no: { fontSize: 12, fontWeight: '700', color: '#5B6170', marginTop: 2 },
-  noPreview: { color: '#8A8F9C', marginVertical: 16 },
-  more: { color: '#8A8F9C', marginTop: 10, fontSize: 13 },
+const makeStyles = (t: Theme) =>
+  StyleSheet.create({
+  textBox: { marginTop: 12, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 12, backgroundColor: t.bg },
+  text: { fontSize: 15, lineHeight: 23, color: t.text, writingDirection: 'auto', textAlign: 'auto' } as any,
+  wrap: { marginTop: 24, backgroundColor: t.card, borderRadius: 18, padding: 16 },
+  title: { fontSize: 18, fontWeight: '800', color: t.text },
+  meta: { fontSize: 13, color: t.muted, marginTop: 4 },
+  cell: { backgroundColor: t.card2, borderRadius: 10, padding: 4, alignItems: 'center' },
+  no: { fontSize: 12, fontWeight: '700', color: t.sub, marginTop: 2 },
+  noPreview: { color: t.muted, marginVertical: 16 },
+  more: { color: t.muted, marginTop: 10, fontSize: 13 },
   cta: { marginTop: 18, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   ctaText: { color: '#fff', fontSize: 17, fontWeight: '700' },
   row: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  secondary: { flex: 1, borderWidth: 1, borderColor: '#E1E4EC', borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
-  secondaryText: { fontSize: 15, fontWeight: '600', color: '#1B1E28' },
+  secondary: { flex: 1, borderWidth: 1, borderColor: t.border, borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
+  secondaryText: { fontSize: 15, fontWeight: '600', color: t.text },
   zoomBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   zoomImg: { width: '94%', height: '84%' },
   zoomHint: { color: '#AAB0BC', marginTop: 12 },
-  zoomShare: { marginTop: 14, backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 22, paddingVertical: 10 },
-  zoomShareText: { fontWeight: '800', color: '#1B1E28' },
-  tip: { fontSize: 12, color: '#8A8F9C', marginTop: 8, textAlign: 'center' },
+  zoomShare: { marginTop: 14, backgroundColor: t.card, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 10 },
+  zoomShareText: { fontWeight: '800', color: t.text },
+  tip: { fontSize: 12, color: t.muted, marginTop: 8, textAlign: 'center' },
 });

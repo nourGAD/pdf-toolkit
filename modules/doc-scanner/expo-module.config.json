@@ -1,4 +1,6 @@
 {
   "platforms": ["android"],
-  "android": { "modules": ["expo.modules.docscanner.DocScannerModule"] }
+  "android": {
+    "modules": ["expo.modules.docscanner.DocScannerModule", "expo.modules.docscanner.IncomingModule"]
+  }
 }

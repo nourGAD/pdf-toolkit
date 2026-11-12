@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="pdftk_widget_name">Scan to PDF</string>
+  <string name="pdftk_widget_label">Scan</string>
+  <string name="pdftk_widget_description">Open the document scanner in one tap</string>
+</resources>

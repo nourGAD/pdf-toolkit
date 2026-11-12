@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import PdfThumbnail from 'react-native-pdf-thumbnail';
+import { Theme, useStyles, useTheme } from '../theme';
 
 export type PageMode = 'select' | 'rotate' | 'delete';
 
@@ -16,6 +17,8 @@ type Props = {
 
 /** Thumbnail grid: tap pages to select them. Replaces typing "1-3,5". */
 export default function PagePicker({ fileUri, mode, selected, onChange, angle = 90, color, help }: Props) {
+  const styles = useStyles(makeStyles);
+  const { theme } = useTheme();
   const [thumbs, setThumbs] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
@@ -80,7 +83,7 @@ export default function PagePicker({ fileUri, mode, selected, onChange, angle = 
               style={[
                 styles.cell,
                 { width: size },
-                on && { borderColor: mode === 'delete' ? '#C0392B' : color, backgroundColor: '#fff' },
+                on && { borderColor: mode === 'delete' ? '#C0392B' : color, backgroundColor: theme.card },
               ]}
               accessibilityLabel={`Page ${p}${on ? ', selected' : ''}`}
             >
@@ -116,6 +119,7 @@ export default function PagePicker({ fileUri, mode, selected, onChange, angle = 
 }
 
 function QuickBtn({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useStyles(makeStyles);
   return (
     <Pressable onPress={onPress} style={styles.qbtn} hitSlop={6}>
       <Text style={styles.qbtnText}>{label}</Text>
@@ -136,23 +140,24 @@ export function toRange(sel: Set<number>): string {
   return parts.join(',');
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: Theme) =>
+  StyleSheet.create({
   loading: { padding: 24, alignItems: 'center', gap: 8 },
-  loadingText: { color: '#8A8F9C' },
+  loadingText: { color: t.muted },
   err: { color: '#C0392B', padding: 12 },
   help: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 },
-  helpText: { fontSize: 14, color: '#1B1E28', lineHeight: 21 },
+  helpText: { fontSize: 14, color: t.text, lineHeight: 21 },
   quick: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' },
-  count: { flex: 1, fontWeight: '700', color: '#1B1E28', minWidth: 110 },
-  qbtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E1E4EC', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
-  qbtnText: { fontSize: 13, fontWeight: '600', color: '#5B6170' },
+  count: { flex: 1, fontWeight: '700', color: t.text, minWidth: 110 },
+  qbtn: { backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  qbtnText: { fontSize: 13, fontWeight: '600', color: t.sub },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  cell: { borderWidth: 2, borderColor: 'transparent', borderRadius: 12, padding: 4, backgroundColor: '#EEF0F4' },
+  cell: { borderWidth: 2, borderColor: 'transparent', borderRadius: 12, padding: 4, backgroundColor: t.card2 },
   thumbBox: { alignItems: 'center', justifyContent: 'center' },
   thumb: { width: '100%', height: '100%' },
   cross: { position: 'absolute', fontSize: 40, color: '#C0392B', fontWeight: '900' },
   cellFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, paddingTop: 4 },
-  pageNo: { fontWeight: '700', color: '#5B6170' },
-  check: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#C5C9D3', alignItems: 'center', justifyContent: 'center' },
+  pageNo: { fontWeight: '700', color: t.sub },
+  check: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
   checkMark: { color: '#fff', fontWeight: '900', fontSize: 12 },
 });

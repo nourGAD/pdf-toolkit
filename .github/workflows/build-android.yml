@@ -1,0 +1,53 @@
+# Build the Google Play file (.aab) from GitHub — no computer needed.
+# Setup once: expo.dev → Account settings → Access tokens → create token,
+# then GitHub repo → Settings → Secrets and variables → Actions → New secret: EXPO_TOKEN
+# Run: GitHub → Actions → "Build Android (.aab)" → Run workflow.
+name: Build Android (.aab)
+
+on:
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: 'Also upload to Google Play (Closed testing). Needs a Play service-account key set up on expo.dev'
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build .aab on EAS (production)
+        run: eas build --platform android --profile production --non-interactive --wait --json > build.json
+
+      - name: Download the .aab
+        run: |
+          URL=$(node -e "const b=require('./build.json');console.log((Array.isArray(b)?b[0]:b).artifacts.buildUrl)")
+          VERSION=$(node -p "require('./app.json').expo.version")
+          curl -L "$URL" -o "pdf-toolkit-v$VERSION.aab"
+          echo "AAB_FILE=pdf-toolkit-v$VERSION.aab" >> $GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.AAB_FILE }}
+          path: ${{ env.AAB_FILE }}
+
+      - name: Upload to Google Play (Closed testing)
+        if: ${{ inputs.submit }}
+        run: eas submit --platform android --profile production --latest --non-interactive
