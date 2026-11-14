@@ -11,6 +11,11 @@ export type IncomingItem = { uri: string; mimeType?: string | null; name?: strin
 type IncomingNative = {
   getInitial(): IncomingItem | null;
   addListener(event: 'onIncoming', cb: (item: IncomingItem) => void): { remove(): void };
+  /** "self" | "none" | "other:<package>" — added in v1.9 (missing on older native builds) */
+  defaultHandler?(mimeType: string): string;
+  appLabel?(pkg: string): string;
+  openWithChooser?(contentUri: string, mimeType: string): boolean;
+  openAppInfo?(pkg: string): boolean;
 };
 
 /** Files/links the app was opened with ("Open with", "Share", widget). Android only. */

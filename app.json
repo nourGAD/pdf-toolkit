@@ -2,7 +2,7 @@
   "expo": {
     "name": "PDF Toolkit",
     "slug": "pdf-toolkit",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -50,6 +50,38 @@
             {
               "scheme": "file",
               "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/vnd.ms-excel"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "application/vnd.ms-excel"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "text/csv"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "text/csv"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "text/comma-separated-values"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "text/comma-separated-values"
             }
           ]
         },
@@ -64,6 +96,18 @@
             },
             {
               "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            },
+            {
+              "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            },
+            {
+              "mimeType": "application/vnd.ms-excel"
+            },
+            {
+              "mimeType": "text/csv"
+            },
+            {
+              "mimeType": "text/comma-separated-values"
             }
           ]
         }

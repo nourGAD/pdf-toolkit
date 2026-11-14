@@ -7,6 +7,9 @@ import HomeScreen from './src/screens/HomeScreen';
 import ToolScreen from './src/screens/ToolScreen';
 import ReaderScreen from './src/screens/ReaderScreen';
 import DocxReaderScreen from './src/screens/DocxReaderScreen';
+import InsightsScreen from './src/screens/InsightsScreen';
+import { PickedFile } from './src/lib/files';
+import { isSampleFile } from './src/lib/defaultApp';
 import { Tool } from './src/tools';
 import { LibraryDoc, openInLibrary } from './src/lib/library';
 import { ThemeProvider, useTheme } from './src/theme';
@@ -17,7 +20,11 @@ import { reportError } from './src/lib/crash';
 // pdf-lib / jszip expect Buffer in some code paths
 (globalThis as any).Buffer ??= Buffer;
 
-type Route = { name: 'home' } | { name: 'tool'; tool: Tool; autoScan?: boolean } | { name: 'reader'; doc: LibraryDoc };
+type Route =
+  | { name: 'home' }
+  | { name: 'tool'; tool: Tool; autoScan?: boolean }
+  | { name: 'reader'; doc: LibraryDoc }
+  | { name: 'insights'; file: PickedFile | null; key: number };
 
 export default function App() {
   return (
@@ -31,6 +38,12 @@ function Root() {
   const { theme } = useTheme();
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const home = () => setRoute({ name: 'home' });
+  const [defaultTick, setDefaultTick] = useState(0);
+  const openTool = (id: string) => {
+    const t = TOOLS.find((x) => x.id === id);
+    if (t) setRoute({ name: 'tool', tool: t });
+  };
+  const insights = (file: PickedFile | null) => setRoute({ name: 'insights', file, key: Date.now() });
 
   // "Open with" / "Share" from other apps, and the home-screen Scan widget
   useEffect(() => {
@@ -41,7 +54,17 @@ function Root() {
           if (scan) setRoute({ name: 'tool', tool: scan, autoScan: true });
           return;
         }
+        if (isSampleFile(a.item.name)) {
+          // the user picked PDF Toolkit in the "Open with" sheet
+          Alert.alert('All set ✅', 'PDF Toolkit opens your PDF files now.\nPDF Toolkit بقى البرنامج الأساسي لفتح ملفات PDF.');
+          setDefaultTick((n) => n + 1);
+          return;
+        }
         const file = await importIncoming(a.item);
+        if (!/\.(pdf|docx)$/i.test(file.name)) {
+          setRoute({ name: 'insights', file, key: Date.now() }); // Excel / CSV → Summary & Dashboard
+          return;
+        }
         setRoute({ name: 'reader', doc: await openInLibrary(file, true) });
       } catch (e: any) {
         reportError(e, 'incoming');
@@ -81,14 +104,19 @@ function Root() {
           )}
           {route.name === 'reader' &&
             (route.doc.kind === 'docx' ? (
-              <DocxReaderScreen key={route.doc.id} doc={route.doc} onBack={home} />
+              <DocxReaderScreen key={route.doc.id} doc={route.doc} onBack={home} onSummary={insights} />
             ) : (
-              <ReaderScreen key={route.doc.id} doc={route.doc} onBack={home} />
+              <ReaderScreen key={route.doc.id} doc={route.doc} onBack={home} onSummary={insights} />
             ))}
+          {route.name === 'insights' && (
+            <InsightsScreen key={route.key} file={route.file} onBack={home} onOpenTool={openTool} />
+          )}
           {route.name === 'home' && (
             <HomeScreen
               onOpen={(tool) => setRoute({ name: 'tool', tool })}
               onRead={(doc) => setRoute({ name: 'reader', doc })}
+              onInsights={() => insights(null)}
+              defaultTick={defaultTick}
             />
           )}
         </View>

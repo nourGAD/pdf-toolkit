@@ -2,6 +2,7 @@
 // Runs automatically on `npm install` (postinstall).
 //   pdf.js  (Apache-2.0) → src/reader/pdfjsBundle.ts
 //   mammoth (BSD-2)      → src/docx/mammothBundle.ts   (Word .docx → HTML)
+//   SheetJS (Apache-2.0) → src/insights/xlsxBundle.ts  (Excel / CSV → rows, for Summary & Dashboard)
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');
@@ -25,6 +26,7 @@ bundle('src/reader/pdfjsBundle.ts', 'pdf.js © Mozilla, Apache-2.0', [
   ['PDFJS_LIB', 'pdfjs-dist/legacy/build/pdf.min.js'],
 ]);
 bundle('src/docx/mammothBundle.ts', 'mammoth.js, BSD-2-Clause', [['MAMMOTH_LIB', 'mammoth/mammoth.browser.min.js']]);
+bundle('src/insights/xlsxBundle.ts', 'SheetJS Community Edition, Apache-2.0', [['XLSX_LIB', 'xlsx/dist/xlsx.full.min.js']]);
 
 // OCR (Apache-2.0): tesseract.js worker + WASM core + Arabic & English models, fully offline
 (function bundleOcr() {

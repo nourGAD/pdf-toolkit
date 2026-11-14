@@ -1,4 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Android 11+: lets us see which app opens PDFs / Word / Excel by default (for the "set as default" card) -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:mimeType="application/pdf" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+    </intent>
+  </queries>
   <application>
     <receiver
       android:name="expo.modules.docscanner.ScanWidgetProvider"
