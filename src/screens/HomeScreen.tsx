@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  DefaultStatus,
+  askToBeDefault,
+  defaultStatus,
+  openOtherAppInfo,
+  shouldShowDefaultCard,
+  snoozeDefaultCard,
+} from '../lib/defaultApp';
 import appJson from '../../app.json';
 import { TOOLS, Tool } from '../tools';
 import { pickDocument } from '../lib/files';
@@ -7,16 +15,16 @@ import { LibraryDoc, kindOf, openInLibrary, recentDocs, removeDoc } from '../lib
 import { Theme, settings, useStyles, useTheme } from '../theme';
 
 const WHATS_NEW = [
-  '🔤 OCR: copy text from photos and scanned PDFs (Arabic + English)',
-  '📉 Compress PDF  ·  📄 Word ⇄ PDF',
-  '🔒 Protect / unlock PDF  ·  🗒️ Fill forms  ·  🔀 Reorder pages',
-  '📲 Open PDFs straight from WhatsApp & Gmail, plus a Scan widget',
-  '🔊 Read aloud now reads Arabic PDFs in the right order',
+  '🧾 Summary: key points, topics and sections of any PDF or Word file — offline',
+  '📊 Dashboard: open an Excel / CSV file and get charts automatically, then choose what each chart shows',
+  '⬇ Download the summary or the dashboard as PDF',
+  '📂 Make PDF Toolkit your default PDF app in one tap',
+  '✨ AI summary is coming soon',
 ];
 
-type Props = { onOpen: (t: Tool) => void; onRead: (d: LibraryDoc) => void };
+type Props = { onOpen: (t: Tool) => void; onRead: (d: LibraryDoc) => void; onInsights: () => void; defaultTick?: number };
 
-export default function HomeScreen({ onOpen, onRead }: Props) {
+export default function HomeScreen({ onOpen, onRead, onInsights, defaultTick }: Props) {
   const styles = useStyles(makeStyles);
   const { theme, cycle } = useTheme();
   const version = appJson.expo.version;
@@ -42,6 +50,44 @@ export default function HomeScreen({ onOpen, onRead }: Props) {
     recentDocs().then(setRecent).catch(() => setRecent([]));
   }, []);
   useEffect(refresh, [refresh]);
+
+  // "Make PDF Toolkit your default PDF app" card (Android). Re-checked when the user comes back from Settings.
+  const [def, setDef] = useState<DefaultStatus>(() => defaultStatus());
+  const [hideDef, setHideDef] = useState(false);
+  useEffect(() => {
+    setDef(defaultStatus());
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && setDef(defaultStatus()));
+    return () => sub.remove();
+  }, [defaultTick]);
+  const showDef = !hideDef && shouldShowDefaultCard(def);
+
+  async function makeDefault() {
+    if (def.state === 'other' && def.pkg) {
+      Alert.alert(
+        `PDFs open in ${def.label} now`,
+        `To use PDF Toolkit instead:\n1. Tap “Open settings”\n2. Open by default → Clear defaults\n3. Come back and tap the button again.\n\nعشان PDF Toolkit يفتح ملفاتك: افتح الإعدادات ← Open by default ← Clear defaults، وبعدين ارجع ودوس الزرار تاني.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open settings', onPress: () => openOtherAppInfo(def.pkg!) },
+        ],
+      );
+      return;
+    }
+    Alert.alert(
+      'One step',
+      'A sample PDF will open. Choose “PDF Toolkit” and tap “Always”.\n\nهيفتح ملف PDF تجريبي: اختار PDF Toolkit ودوس Always (دايمًا).',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: () =>
+            askToBeDefault()
+              .then((ok) => !ok && Alert.alert('Could not open the chooser', 'Open any PDF from Files or WhatsApp, choose PDF Toolkit and tap “Always”.'))
+              .catch((e) => Alert.alert('Could not open the chooser', e?.message ?? String(e))),
+        },
+      ],
+    );
+  }
 
   async function openReader() {
     try {
@@ -123,6 +169,42 @@ export default function HomeScreen({ onOpen, onRead }: Props) {
             </View>
             <Text style={styles.readerArrow}>›</Text>
           </Pressable>
+
+          <Pressable style={({ pressed }) => [styles.insights, pressed && { opacity: 0.8 }]} onPress={onInsights}>
+            <Text style={styles.readerIcon}>📊</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.insightsTitle}>Summary & Dashboard · ملخص وداشبورد</Text>
+              <Text style={styles.insightsSub}>PDF, Word, Excel → key points & charts</Text>
+            </View>
+            <View style={styles.newPill}>
+              <Text style={styles.newPillText}>NEW</Text>
+            </View>
+          </Pressable>
+
+          {showDef && (
+            <View style={styles.defCard}>
+              <Text style={styles.defTitle}>📂 Open PDFs with PDF Toolkit</Text>
+              <Text style={styles.defText}>
+                {def.state === 'other'
+                  ? `PDFs open in ${def.label} now. Make PDF Toolkit the default to read, summarize and edit them in one tap.`
+                  : 'Make PDF Toolkit your default PDF app — files from WhatsApp, Gmail and Files open here directly.'}
+              </Text>
+              <View style={styles.defRow}>
+                <Pressable
+                  onPress={() => {
+                    snoozeDefaultCard();
+                    setHideDef(true);
+                  }}
+                  style={styles.defLater}
+                >
+                  <Text style={styles.defLaterText}>Not now</Text>
+                </Pressable>
+                <Pressable onPress={makeDefault} style={styles.defBtn}>
+                  <Text style={styles.defBtnText}>Set as default · اجعله الأساسي</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
 
           {recent.length > 0 && (
             <View style={{ marginTop: 16 }}>
@@ -213,6 +295,19 @@ const makeStyles = (t: Theme) =>
   readerTitle: { color: '#fff', fontSize: 17, fontWeight: '800' },
   readerSub: { color: '#D9ECFC', fontSize: 13, marginTop: 2 },
   readerArrow: { color: '#fff', fontSize: 30, marginTop: -4 },
+  insights: { marginTop: 10, backgroundColor: t.card, borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14, borderWidth: 1, borderColor: t.border },
+  insightsTitle: { color: t.text, fontSize: 16, fontWeight: '800' },
+  insightsSub: { color: t.muted, fontSize: 13, marginTop: 2 },
+  newPill: { backgroundColor: '#2EAD5B', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  newPillText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  defCard: { marginTop: 12, backgroundColor: t.accentSoft, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: t.border, gap: 6 },
+  defTitle: { color: t.text, fontSize: 15, fontWeight: '800' },
+  defText: { color: t.sub, fontSize: 13.5, lineHeight: 19 },
+  defRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  defLater: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, backgroundColor: t.card },
+  defLaterText: { color: t.sub, fontWeight: '700' },
+  defBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: t.accent, alignItems: 'center' },
+  defBtnText: { color: '#fff', fontWeight: '800' },
   version: { position: 'absolute', top: 6, right: 0, fontSize: 12, color: t.faint, fontWeight: '600' },
   search: { backgroundColor: t.card, borderRadius: 12, borderWidth: 1, borderColor: t.border, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: t.text, marginBottom: 12 },
   empty: { color: t.muted, textAlign: 'center', marginVertical: 12 },

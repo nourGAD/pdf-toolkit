@@ -37,7 +37,8 @@
     "mammoth": "^1.13.0",
     "pdfjs-dist": "^3.11.174",
     "tesseract.js": "^7.0.0",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "expo start",

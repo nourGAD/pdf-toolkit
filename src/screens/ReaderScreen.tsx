@@ -1,3 +1,4 @@
+import type { PickedFile } from '../lib/files';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -39,7 +40,15 @@ const WebView = RNWebView as unknown as ComponentType<{
   style?: object;
 }>;
 
-export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack: () => void }) {
+export default function ReaderScreen({
+  doc,
+  onBack,
+  onSummary,
+}: {
+  doc: LibraryDoc;
+  onBack: () => void;
+  onSummary?: (f: PickedFile) => void;
+}) {
   const styles = useStyles(makeStyles);
   const { theme, cycle } = useTheme();
   const web = useRef<WebViewHandle>(null);
@@ -250,6 +259,15 @@ export default function ReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack:
         <Text style={styles.title} numberOfLines={1}>
           {doc.name}
         </Text>
+        {onSummary && (
+          <Pressable
+            onPress={() => onSummary({ uri: doc.uri, name: doc.name, mimeType: doc.kind === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf' })}
+            hitSlop={8}
+            accessibilityLabel="Summary and dashboard"
+          >
+            <Text style={{ fontSize: 19 }}>🧾</Text>
+          </Pressable>
+        )}
         <Pressable onPress={cycle} hitSlop={8} accessibilityLabel="Toggle dark mode">
           <Text style={styles.moon}>{theme.dark ? '☀️' : '🌙'}</Text>
         </Pressable>

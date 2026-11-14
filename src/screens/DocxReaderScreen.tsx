@@ -1,3 +1,4 @@
+import type { PickedFile } from '../lib/files';
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentType, Ref } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -22,7 +23,15 @@ const RATES = [0.8, 1, 1.25, 1.5] as const;
 const FONT_STEPS = [0.85, 1, 1.15, 1.3, 1.5, 1.75];
 
 /** Word (.docx) reader: clean reflowed text, dark mode, text size, read aloud, resume position. */
-export default function DocxReaderScreen({ doc, onBack }: { doc: LibraryDoc; onBack: () => void }) {
+export default function DocxReaderScreen({
+  doc,
+  onBack,
+  onSummary,
+}: {
+  doc: LibraryDoc;
+  onBack: () => void;
+  onSummary?: (f: PickedFile) => void;
+}) {
   const styles = useStyles(makeStyles);
   const { theme, cycle } = useTheme();
   const web = useRef<WebViewHandle>(null);
@@ -130,6 +139,15 @@ export default function DocxReaderScreen({ doc, onBack }: { doc: LibraryDoc; onB
         <Text style={styles.title} numberOfLines={1}>
           📝 {doc.name}
         </Text>
+        {onSummary && (
+          <Pressable
+            onPress={() => onSummary({ uri: doc.uri, name: doc.name, mimeType: doc.kind === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf' })}
+            hitSlop={8}
+            accessibilityLabel="Summary and dashboard"
+          >
+            <Text style={{ fontSize: 19 }}>🧾</Text>
+          </Pressable>
+        )}
         <Pressable
           onPress={() => setFont(FONT_STEPS[Math.max(0, fontIdx - 1)])}
           hitSlop={6}
